@@ -26,7 +26,7 @@
   --blue: oklch(0.47 0.07 235);
   --green: oklch(0.72 0.17 145);
 
-  --display: "TF2 Build", "Arial Narrow", sans-serif;
+  --display: "TF2 Build", "Lilita One", "Arial Narrow", sans-serif;
   --body: "Quicksand", "Segoe UI", sans-serif;
   --shadow: 0 3px 0 oklch(0.15 0.01 60 / 0.55);
 }

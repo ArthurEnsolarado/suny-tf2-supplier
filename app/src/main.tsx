@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import "@fontsource/lilita-one/latin-400";
 import "@fontsource/quicksand/latin-500";
 import "@fontsource/quicksand/latin-600";
 import "@fontsource/quicksand/latin-700";

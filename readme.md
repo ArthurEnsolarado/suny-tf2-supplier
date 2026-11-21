@@ -53,7 +53,7 @@ windows might show a SmartScreen warning because the installer isn't code-signed
 
 - the TF2 banner, logo and the class icons are **read from your own Steam / TF2 install while the app runs**. nothing from Valve is in this repo or in the installer.
 - mod images come from GameBanana's CDN and always show who made the mod.
-- the in-game style font (TF2 Build) is **not included**, its license isn't clear. drop `tf2build.ttf` in `app/public/fonts/` if you want it, otherwise the app uses a fallback font.
+- the in-game style font (TF2 Build) is **not included**, its license isn't clear. the app ships with [Lilita One](https://fonts.google.com/specimen/Lilita+One) instead (free license, looks close enough). if you own TF2 Build, drop `tf2build.ttf` in `app/public/fonts/` and it takes over on your machine.
 - the app icon is mine.
 
 ## what it touches on your pc

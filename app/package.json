@@ -1,7 +1,7 @@
 {
   "name": "suny-tf2-supplier-app",
   "private": true,
-  "version": "0.7.1",
+  "version": "0.7.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@fontsource/lilita-one": "5.3.0",
     "@fontsource/quicksand": "5.3.0",
     "@tauri-apps/api": "2.12.5",
     "react": "19.3.1",

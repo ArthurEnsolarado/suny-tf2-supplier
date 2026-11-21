@@ -3,6 +3,11 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.7.2
+
+### Changed
+- **Titles, tabs and buttons now use Lilita One**, a free font that looks a lot like the TF2 menu (before, builds without TF2 Build fell back to plain Arial). It ships inside the installer, together with its license.
+
 ## 0.7.1
 
 ### Fixed
