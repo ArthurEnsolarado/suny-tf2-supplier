@@ -21,7 +21,7 @@ pub enum Error {
     GameBanana { code: String, message: String },
 
     #[error("falha de rede: {0}")]
-    Network(#[from] reqwest::Error),
+    Network(String),
 
     #[error("resposta inesperada do GameBanana: {0}")]
     BadResponse(#[from] serde_json::Error),
@@ -58,6 +58,32 @@ pub enum Error {
 
     #[error("o GameBanana devolveu uma resposta vazia. Tente de novo em instantes")]
     EmptyResponse,
+}
+
+/// Texto de um erro de rede com a causa de verdade. `reqwest` mostra só "error decoding response body"
+/// para qualquer queda no meio do download; aqui vem junto o motivo (tempo esgotado, conexão reiniciada...).
+pub fn net_err(e: &reqwest::Error) -> String {
+    use std::error::Error as _;
+    let mut text = e.to_string();
+    let mut cause = e.source();
+    while let Some(c) = cause {
+        let s = c.to_string();
+        if !text.contains(&s) {
+            text.push_str(": ");
+            text.push_str(&s);
+        }
+        cause = c.source();
+    }
+    if e.is_timeout() {
+        text.push_str(" (tempo esgotado: a rede está lenta ou bloqueando a conexão)");
+    }
+    text
+}
+
+impl From<reqwest::Error> for Error {
+    fn from(e: reqwest::Error) -> Self {
+        Error::Network(net_err(&e))
+    }
 }
 
 impl Error {

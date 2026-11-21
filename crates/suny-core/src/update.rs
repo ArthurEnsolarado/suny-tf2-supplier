@@ -165,7 +165,7 @@ pub async fn check_with(api_base: &str, dl_prefix: &str, repo: &str, current: &s
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
-        .map_err(|e| format!("não consegui consultar as atualizações: {e}"))?;
+        .map_err(|e| format!("não consegui consultar as atualizações: {}", crate::error::net_err(&e)))?;
     let status = res.status();
     if status == reqwest::StatusCode::NOT_FOUND {
         return Ok(UpdateInfo { current: cur.to_string(), latest: None, available: false, releases: vec![], installer: None });
@@ -237,7 +237,7 @@ async fn download_verified(url: &str, dest: &Path, size: u64, sha256: &str, rep:
         .timeout(Duration::from_secs(900))
         .build()
         .map_err(|e| e.to_string())?;
-    let mut res = client.get(url).send().await.and_then(|r| r.error_for_status()).map_err(|e| format!("não consegui baixar a atualização: {e}"))?;
+    let mut res = client.get(url).send().await.and_then(|r| r.error_for_status()).map_err(|e| format!("não consegui baixar a atualização: {}", crate::error::net_err(&e)))?;
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -245,7 +245,7 @@ async fn download_verified(url: &str, dest: &Path, size: u64, sha256: &str, rep:
     let mut hasher = Sha256::new();
     let mut got = 0u64;
     loop {
-        let Some(chunk) = res.chunk().await.map_err(|e| format!("a conexão caiu durante o download: {e}"))? else { break };
+        let Some(chunk) = res.chunk().await.map_err(|e| format!("a conexão caiu durante o download: {}", crate::error::net_err(&e)))? else { break };
         got += chunk.len() as u64;
         if got > size {
             drop(file);

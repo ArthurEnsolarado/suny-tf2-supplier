@@ -298,6 +298,10 @@ pub struct Client {
 
 /// 1 tentativa + 2 repetições.
 const ATTEMPTS: u32 = 3;
+/// Tentativas de um download: cada uma continua de onde a anterior caiu.
+const DOWNLOAD_ATTEMPTS: u32 = 6;
+/// Limite das consultas curtas (listas, fichas).
+const API_TIMEOUT: Duration = Duration::from_secs(20);
 
 const DEFAULT_DL_PREFIX: &str = "https://gamebanana.com/dl/";
 
@@ -306,7 +310,9 @@ impl Client {
     pub fn new(app_version: &str) -> Result<Self> {
         let http = reqwest::Client::builder()
             .user_agent(format!("suny-tf2-supplier/{app_version}"))
-            .timeout(Duration::from_secs(20))
+            // Nada de limite total: ele cortava qualquer download que passasse de 20 s (rede lenta, WARP, faculdade).
+            .connect_timeout(Duration::from_secs(15))
+            .read_timeout(Duration::from_secs(30)) // só conta se a conexão ficar PARADA por 30 s
             .build()?;
         Ok(Self { http, base: BASE.to_string(), dl_prefix: DEFAULT_DL_PREFIX.to_string(), retry_delay: Duration::from_millis(500) })
     }
@@ -370,26 +376,72 @@ impl Client {
         }
 
         let result = async {
-            let mut resp = self.http.get(&file.download_url).send().await?.error_for_status()?;
             let mut out = std::fs::File::create(dest).map_err(|e| Error::io(dest, e))?;
             let mut hasher = Md5::new();
             let mut total: u64 = 0;
-            while let Some(chunk) = resp.chunk().await? {
-                total += chunk.len() as u64;
-                if total > max_bytes {
-                    return Err(Error::TooLarge(format!("passou de {max_bytes} bytes durante o download")));
+            let mut last: Option<Error> = None;
+            for attempt in 0..DOWNLOAD_ATTEMPTS {
+                if attempt > 0 {
+                    tokio::time::sleep(self.retry_delay * attempt).await;
                 }
-                hasher.update(&chunk);
-                out.write_all(&chunk).map_err(|e| Error::io(dest, e))?;
-            }
-            out.flush().map_err(|e| Error::io(dest, e))?;
-            if let Some(expected) = file.md5.as_deref().filter(|m| !m.is_empty()) {
-                let actual = format!("{:x}", hasher.finalize());
-                if !actual.eq_ignore_ascii_case(expected.trim()) {
-                    return Err(Error::ChecksumMismatch { expected: expected.to_string(), actual });
+                // Depois de uma queda, pede só o que falta (Range). Se o servidor ignorar o pedido, recomeça do zero.
+                let mut req = self.http.get(&file.download_url);
+                if total > 0 {
+                    req = req.header("Range", format!("bytes={total}-"));
+                }
+                let resp = match req.send().await {
+                    Ok(r) => r,
+                    Err(e) => {
+                        last = Some(e.into());
+                        continue;
+                    }
+                };
+                let status = resp.status();
+                if status.is_server_error() || status.as_u16() == 429 {
+                    last = resp.error_for_status().map(|_| ()).err().map(Error::from);
+                    continue;
+                }
+                if total > 0 && status != reqwest::StatusCode::PARTIAL_CONTENT {
+                    if status != reqwest::StatusCode::OK {
+                        // 416 e afins: o que já veio não serve de ponto de partida
+                        last = Some(Error::Network(format!("o servidor respondeu {status} ao pedir a continuação do download")));
+                    }
+                    out = std::fs::File::create(dest).map_err(|e| Error::io(dest, e))?;
+                    hasher = Md5::new();
+                    total = 0;
+                    if status != reqwest::StatusCode::OK {
+                        continue;
+                    }
+                }
+                let mut resp = resp.error_for_status()?;
+                loop {
+                    match resp.chunk().await {
+                        Ok(Some(chunk)) => {
+                            total += chunk.len() as u64;
+                            if total > max_bytes {
+                                return Err(Error::TooLarge(format!("passou de {max_bytes} bytes durante o download")));
+                            }
+                            hasher.update(&chunk);
+                            out.write_all(&chunk).map_err(|e| Error::io(dest, e))?;
+                        }
+                        Ok(None) => {
+                            out.flush().map_err(|e| Error::io(dest, e))?;
+                            if let Some(expected) = file.md5.as_deref().filter(|m| !m.is_empty()) {
+                                let actual = format!("{:x}", hasher.finalize());
+                                if !actual.eq_ignore_ascii_case(expected.trim()) {
+                                    return Err(Error::ChecksumMismatch { expected: expected.to_string(), actual });
+                                }
+                            }
+                            return Ok(total);
+                        }
+                        Err(e) => {
+                            last = Some(e.into()); // a conexão caiu no meio: tenta continuar de onde parou
+                            break;
+                        }
+                    }
                 }
             }
-            Ok(total)
+            Err(last.unwrap_or(Error::EmptyResponse))
         }
         .await;
 
@@ -454,7 +506,7 @@ impl Client {
             if attempt > 0 {
                 tokio::time::sleep(self.retry_delay * attempt).await;
             }
-            let resp = match self.http.get(url).send().await {
+            let resp = match self.http.get(url).timeout(API_TIMEOUT).send().await {
                 Ok(r) => r,
                 Err(e) => {
                     last = e.into();
@@ -667,6 +719,67 @@ mod tests {
         let c = Client::new("test").unwrap().with_download_prefix(prefix.clone());
         let n = c.download_to(&file_info(format!("{prefix}1"), body.len() as u64, Some(md5)), &dest, 1024).await.unwrap();
         assert_eq!(n, body.len() as u64);
+        assert_eq!(std::fs::read(&dest).unwrap(), body);
+        let _ = std::fs::remove_dir_all(dest.parent().unwrap().parent().unwrap());
+    }
+
+    /// Servidor "ruim": a 1ª conexão manda metade do arquivo e cai; a 2ª entende `Range` e manda o resto.
+    fn serve_dropping_then_resuming(body: Vec<u8>, honor_range: bool) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let seen2 = seen.clone();
+        std::thread::spawn(move || {
+            for (i, conn) in listener.incoming().take(3).enumerate() {
+                let Ok(mut s) = conn else { return };
+                let mut buf = [0u8; 4096];
+                let n = s.read(&mut buf).unwrap_or(0);
+                let req = String::from_utf8_lossy(&buf[..n]).to_string();
+                let range_from = req.lines().find_map(|l| l.to_ascii_lowercase().strip_prefix("range: bytes=").and_then(|r| r.trim_end_matches('-').trim().parse::<usize>().ok()));
+                seen2.lock().unwrap().push(format!("{i}:{:?}", range_from));
+                let half = body.len() / 2;
+                if i == 0 {
+                    let _ = write!(s, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+                    let _ = s.write_all(&body[..half]);
+                    let _ = s.flush(); // fecha no meio: o cliente vê a conexão cair
+                } else if let (true, Some(from)) = (honor_range, range_from) {
+                    let rest = &body[from..];
+                    let _ = write!(s, "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {}-{}/{}\r\nConnection: close\r\n\r\n", rest.len(), from, body.len() - 1, body.len());
+                    let _ = s.write_all(rest);
+                } else {
+                    let _ = write!(s, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+                    let _ = s.write_all(&body);
+                }
+            }
+        });
+        (format!("http://127.0.0.1:{port}/"), seen)
+    }
+
+    #[tokio::test]
+    async fn download_resumes_after_the_connection_drops_midway() {
+        let body: Vec<u8> = (0..4000u32).map(|i| (i % 251) as u8).collect();
+        let md5 = format!("{:x}", Md5::digest(&body));
+        let (prefix, seen) = serve_dropping_then_resuming(body.clone(), true);
+        let dest = tmp_file("resume");
+        let c = Client::new("test").unwrap().with_download_prefix(prefix.clone()).with_retry_delay(Duration::from_millis(5));
+        let n = c.download_to(&file_info(format!("{prefix}1"), body.len() as u64, Some(md5)), &dest, 1 << 20).await.unwrap();
+        assert_eq!(n, body.len() as u64);
+        assert_eq!(std::fs::read(&dest).unwrap(), body, "o arquivo final é idêntico (hash conferido)");
+        let log = seen.lock().unwrap().clone();
+        assert_eq!(log[0], "0:None");
+        assert_eq!(log[1], "1:Some(2000)", "a 2ª tentativa pede só o que faltou: {log:?}");
+        let _ = std::fs::remove_dir_all(dest.parent().unwrap().parent().unwrap());
+    }
+
+    #[tokio::test]
+    async fn download_restarts_from_zero_when_the_server_ignores_range() {
+        let body: Vec<u8> = (0..3000u32).map(|i| (i % 241) as u8).collect();
+        let md5 = format!("{:x}", Md5::digest(&body));
+        let (prefix, _seen) = serve_dropping_then_resuming(body.clone(), false);
+        let dest = tmp_file("norange");
+        let c = Client::new("test").unwrap().with_download_prefix(prefix.clone()).with_retry_delay(Duration::from_millis(5));
+        c.download_to(&file_info(format!("{prefix}1"), body.len() as u64, Some(md5)), &dest, 1 << 20).await.unwrap();
         assert_eq!(std::fs::read(&dest).unwrap(), body);
         let _ = std::fs::remove_dir_all(dest.parent().unwrap().parent().unwrap());
     }

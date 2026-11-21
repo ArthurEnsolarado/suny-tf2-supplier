@@ -641,7 +641,7 @@ async fn download_release(spec: &ReleaseSpec, dest: &Path, rep: &Reporter) -> Re
         .send()
         .await
         .and_then(|r| r.error_for_status())
-        .map_err(|e| format!("não consegui baixar o Casual Preloader: {e}"))?;
+        .map_err(|e| format!("não consegui baixar o Casual Preloader: {}", crate::error::net_err(&e)))?;
     if let Some(len) = res.content_length() {
         if len != spec.size {
             return Err(format!("o arquivo do preloader tem tamanho diferente do esperado ({len} em vez de {} bytes). Recusado.", spec.size));
@@ -654,7 +654,7 @@ async fn download_release(spec: &ReleaseSpec, dest: &Path, rep: &Reporter) -> Re
     let mut hasher = Sha256::new();
     let mut got = 0u64;
     loop {
-        let chunk = res.chunk().await.map_err(|e| format!("a conexão caiu durante o download: {e}"))?;
+        let chunk = res.chunk().await.map_err(|e| format!("a conexão caiu durante o download: {}", crate::error::net_err(&e)))?;
         let Some(chunk) = chunk else { break };
         got += chunk.len() as u64;
         if got > spec.size {

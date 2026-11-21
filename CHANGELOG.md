@@ -3,6 +3,13 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.7.1
+
+### Fixed
+- **Downloads failing on slow or filtered networks** (university wifi, VPN / WARP): the app cut every request after 20 seconds, so any mod that took longer showed "network failure: error decoding response body". Now it only gives up when the connection sits idle for 30 seconds.
+- Downloads that drop halfway now **resume from where they stopped** (up to 6 tries) instead of failing, and start over by themselves if the server doesn't support resuming. The final file is still checked against GameBanana's MD5.
+- Network errors now say the real cause (timed out, connection reset...) instead of the generic "error decoding response body".
+
 ## 0.7.0
 
 First public release. A lot of stuff, so here we go.
