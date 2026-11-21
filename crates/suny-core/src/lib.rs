@@ -7,6 +7,7 @@ pub mod archive;
 pub mod art;
 pub mod casual;
 pub mod commands;
+pub mod contents;
 pub mod error;
 pub mod gamebanana;
 pub mod gameicons;

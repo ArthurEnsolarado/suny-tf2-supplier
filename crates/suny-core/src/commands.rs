@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 use crate::gamebanana::{Client, Kind, Query, Sort};
 use crate::steam::Installation;
 use crate::installer::{self, ModMeta};
-use crate::{analysis, archive, art, casual, gameicons, library, steam, system, update, vanilla, Error};
+use crate::{analysis, archive, art, casual, contents, gameicons, library, steam, system, update, vanilla, Error};
 
 #[derive(Deserialize)]
 struct ListArgs {
@@ -396,6 +396,19 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
                     "custom": custom,
                     "system": snapshot,
                 }))
+            })
+            .await
+            .map_err(|e| e.to_string())?
+        }
+
+        // O que cada item de `custom` muda e quais itens disputam o mesmo arquivo. Só leitura; pode levar alguns segundos.
+        "custom_report" => {
+            let p: PathArgs = args(a)?;
+            tokio::task::spawn_blocking(move || {
+                let install = resolve(&p.path)?;
+                let custom_dir = install.custom_dir();
+                let entries = library::scan_custom(&custom_dir).map_err(|e| e.to_string())?;
+                Ok(json!(contents::report(&custom_dir, &entries)))
             })
             .await
             .map_err(|e| e.to_string())?

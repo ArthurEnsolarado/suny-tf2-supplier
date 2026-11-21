@@ -163,6 +163,32 @@ export interface ChangeGroup {
   examples: string[];
 }
 
+/** O que um item de `custom` muda (lido do próprio conteúdo) e com quem ele disputa arquivos. */
+export interface ItemContents {
+  name: string;
+  files: number;
+  truncated: boolean;
+  groups: ChangeGroup[];
+  classes: string[];
+  wins: number;
+  loses: number;
+  rivals: string[];
+}
+
+export interface ConflictSet {
+  items: string[];
+  winner: string;
+  count: number;
+  examples: string[];
+}
+
+export interface CustomReport {
+  items: ItemContents[];
+  conflicts: ConflictSet[];
+  conflict_files: number;
+  unreadable: string[];
+}
+
 export interface Analysis {
   file_count: number;
   game_files: number;

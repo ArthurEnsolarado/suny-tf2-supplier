@@ -3,6 +3,12 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.8.0
+
+### Added
+- **Installed** now reads what each item in `tf/custom` actually changes (weapon models, HUD, sounds of a class, ...) and shows it as tags on the card. It works for mods you put there by hand, folders and `.vpk` alike, without touching anything.
+- **File fights**: when two items bring the same file, only one can be used by the game. The Installed tab lists those fights, says which item usually wins (the first one in alphabetical order, the way the game reads `custom`) and which ones lose. Read only: to change who wins you rename the folder or the `.vpk`.
+
 ## 0.7.9
 
 ### Changed
