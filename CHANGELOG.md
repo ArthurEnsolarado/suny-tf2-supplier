@@ -3,6 +3,11 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.7.7
+
+### Fixed
+- Casual models (weapons, cosmetics) showing the normal model: the preloader only makes them appear when TF2 starts with `+exec w/config.cfg`, and the **Play button now adds that option by itself** when the preloader is applied and your Steam launch options don't have it. Your own launch options are kept. Starting TF2 from the Steam library still needs the option set in Steam.
+
 ## 0.7.6
 
 ### Added

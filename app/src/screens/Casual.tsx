@@ -355,6 +355,9 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
                     {t("casual.launch.today")} <code>{status.launch_options}</code>
                   </span>
                 )}
+                <p className="muted small">
+                  <T k="casual.launch.playHint" />
+                </p>
                 <div>
                   <button className="link" onClick={() => navigator.clipboard?.writeText(LAUNCH_OPTION).then(() => setCopied(true), () => setCopied(false))}>
                     {copied ? t("common.copied") : t("casual.launch.copy", { opt: LAUNCH_OPTION })}

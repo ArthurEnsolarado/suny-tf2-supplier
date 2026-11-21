@@ -182,7 +182,7 @@ export function App() {
   const play = () => {
     setLaunching(true);
     setLaunchError(undefined);
-    call("launch_game").catch((e: unknown) => {
+    call("launch_game", { path }).catch((e: unknown) => {
       setLaunching(false);
       setLaunchError(e instanceof Error ? e.message : String(e));
       setTimeout(() => setLaunchError(undefined), 8000);

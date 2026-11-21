@@ -1079,6 +1079,16 @@ pub fn launch_options_ok(opts: &str) -> bool {
     opts.to_ascii_lowercase().contains("+exec w/config.cfg")
 }
 
+/// Opções que o botão Play passa ao Steam: as que o usuário já tem + `+exec w/config.cfg` se faltar.
+/// `None` = não precisa acrescentar nada (já está nas opções do Steam).
+pub fn extra_launch_args(steam_opts: Option<&str>) -> Option<String> {
+    let current = steam_opts.map(str::trim).unwrap_or("");
+    if launch_options_ok(current) {
+        return None;
+    }
+    Some(if current.is_empty() { "+exec w/config.cfg".to_string() } else { format!("{current} +exec w/config.cfg") })
+}
+
 pub fn status(l: &Layout, tf_dir: Option<&Path>, game_applied: Option<bool>) -> Value {
     let rt = runtime(l);
     let state = load_state(l);
@@ -1259,6 +1269,15 @@ mod tests {
         make_zip(&ads, &[("a.txt:segredo", b"x")]);
         assert!(extract_release(&ads, &out2).is_err());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn play_adds_the_exec_only_when_it_is_missing() {
+        assert_eq!(extra_launch_args(None).as_deref(), Some("+exec w/config.cfg"));
+        assert_eq!(extra_launch_args(Some("   ")).as_deref(), Some("+exec w/config.cfg"));
+        assert_eq!(extra_launch_args(Some("-novid -windowed")).as_deref(), Some("-novid -windowed +exec w/config.cfg"));
+        assert_eq!(extra_launch_args(Some("-novid +exec w/config.cfg")), None);
+        assert_eq!(extra_launch_args(Some("+EXEC W/CONFIG.CFG")), None);
     }
 
     #[test]

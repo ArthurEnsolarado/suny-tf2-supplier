@@ -224,9 +224,23 @@ pub fn steam_run_url(app_id: u32) -> String {
     format!("steam://rungameid/{app_id}")
 }
 
-/// Só deixamos abrir `steam://rungameid/<número>`: nada que venha da interface vira comando do sistema.
+/// Igual a [`steam_run_url`], mas com opções de inicialização: `steam://run/<id>//<opções codificadas>/`.
+pub fn steam_run_url_with_args(app_id: u32, args: &str) -> String {
+    let enc: String = args.bytes().map(|b| if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.') { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
+    format!("steam://run/{app_id}//{enc}/")
+}
+
+/// Só deixamos abrir `steam://rungameid/<número>` ou `steam://run/<número>//<opções codificadas>/`:
+/// nada que venha da interface vira comando do sistema (as opções só têm letras, números, `-_.` e `%XX`).
 fn is_safe_steam_url(url: &str) -> bool {
-    url.strip_prefix("steam://rungameid/").is_some_and(|id| !id.is_empty() && id.len() <= 10 && id.bytes().all(|b| b.is_ascii_digit()))
+    let digits = |id: &str| !id.is_empty() && id.len() <= 10 && id.bytes().all(|b| b.is_ascii_digit());
+    if let Some(id) = url.strip_prefix("steam://rungameid/") {
+        return digits(id);
+    }
+    let Some(rest) = url.strip_prefix("steam://run/") else { return false };
+    let Some((id, opts)) = rest.split_once("//") else { return false };
+    let Some(opts) = opts.strip_suffix('/') else { return false };
+    digits(id) && opts.len() <= 400 && opts.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'%'))
 }
 
 /// Só endereços do repositório do projeto (nada vindo da interface vira comando do sistema).
@@ -456,8 +470,24 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
             if running {
                 return Err("O TF2 já está aberto.".into());
             }
-            open_steam_url(&steam_run_url(crate::TF2_APP_ID))?;
-            Ok(json!({ "launched": true }))
+            // Com o Casual Preloader aplicado, o jogo precisa abrir com `+exec w/config.cfg` (é ele que deixa os modelos
+            // aparecerem). Se o Steam não tem isso nas opções do usuário, o Play acrescenta.
+            let p: GameStateArgs = args(a)?;
+            let extra = tokio::task::spawn_blocking(move || {
+                let found = p.path.and_then(|s| resolve(&s).ok())?;
+                if !library::preloader_state(&found).applied() {
+                    return None;
+                }
+                casual::extra_launch_args(casual::steam_launch_options().as_deref())
+            })
+            .await
+            .map_err(|e| e.to_string())?;
+            let url = match &extra {
+                Some(opts) => steam_run_url_with_args(crate::TF2_APP_ID, opts),
+                None => steam_run_url(crate::TF2_APP_ID),
+            };
+            open_steam_url(&url)?;
+            Ok(json!({ "launched": true, "added_launch_options": extra }))
         }
 
         // Atualizações do app: consulta as releases estáveis do repositório no GitHub (não manda nenhum dado seu).
@@ -870,6 +900,18 @@ mod tests {
             assert!(!is_safe_project_url(bad), "{bad:?}");
         }
         assert!(open_url("calc.exe").is_err());
+    }
+
+    #[test]
+    fn play_url_carries_the_launch_options_encoded_and_still_passes_the_safety_check() {
+        let url = steam_run_url_with_args(440, "-novid +exec w/config.cfg");
+        assert_eq!(url, "steam://run/440//-novid%20%2Bexec%20w%2Fconfig.cfg/");
+        assert!(is_safe_steam_url(&url));
+        // nada que escape do formato vira comando
+        for bad in ["steam://run/440//a b/", "steam://run/440//a&calc/", "steam://run/440//a\"b/", "steam://run/x//a/", "steam://run/440//a", "steam://run//a/", "steam://run/440//a/../b/"] {
+            assert!(!is_safe_steam_url(bad), "{bad:?}");
+        }
+        assert!(!is_safe_steam_url(&format!("steam://run/440//{}/", "a".repeat(401))));
     }
 
     #[test]

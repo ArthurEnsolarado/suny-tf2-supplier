@@ -262,6 +262,7 @@ export const en: Record<Key, string> = {
   "casual.revert.confirmButton": "Confirm and revert",
   "casual.launch.title": "So the game opens with the mods",
   "casual.launch.option": "TF2 must open with <code>{opt}</code> in its Steam launch options (Library, TF2, Properties).",
+  "casual.launch.playHint": "The <b>Play button in this app</b> adds it for you when it's missing and the preloader is applied. If you start TF2 from the Steam library instead, it has to be in the launch options.",
   "casual.launch.there": "Already there",
   "casual.launch.missing": "Missing",
   "casual.launch.unknown": "Couldn't read it",
