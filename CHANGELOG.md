@@ -3,6 +3,23 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.7.3
+
+### Added
+- **Listen before you install, right in the catalog**: every sound card has a play button. It downloads the first file of the pack, plays the first sound and says how many more are inside. In a sound's page, the sounds are listed with play buttons as soon as it opens (no need to press Analyze first).
+- **Game path checker**: type, paste or pick the folder and the app tells you right away if it works (build number included) or exactly what's wrong. It accepts the `Team Fortress 2` folder, `tf`, `custom`, `hl2.exe`, the Steam library folder, and quoted paths.
+- **Better game detection**: besides Steam, the app now looks in the usual folders (`Program Files (x86)\Steam`, `SteamLibrary` on every drive...). **Find the game** (Home and Settings) shows what was found, what Steam said and every folder checked, so it never just says "not found". There's also a **Choose folder** button.
+- **Play TF2 moved into the Home card**, where "Ready" used to be. Still greyed out while the game is open.
+- Real icons: the whole app uses the Lucide set now (tabs, buttons, badges, categories, gallery arrows).
+
+### Fixed
+- The language switch was cut off at the right edge in Settings.
+- Buttons in Settings (Updates, Storage) were glued to the text and to each other.
+- Disabled outline buttons looked like plain text.
+- The "Categories" title was drawn under the list while searching.
+- The `tar do Windows` name showed up untranslated in English and Spanish.
+- A sound's page had a huge empty block and stretched to the bottom of the window. It fits its content now.
+
 ## 0.7.2
 
 ### Changed

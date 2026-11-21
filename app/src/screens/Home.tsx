@@ -1,8 +1,11 @@
 import type { ArtSet, Inspect } from "../types";
 import { fmtMb } from "../format";
 import { useI18n } from "../i18n";
+import type { Detect } from "../types";
 import { Badge, Box, ErrorState, Icon } from "../ui";
+import { DetectPanel } from "./DetectPanel";
 import { PathForm, PathText } from "./PathForm";
+import { PlayButton, type PlayState } from "./PlayButton";
 
 const MIN_DISK_MB = 2048;
 const MIN_RAM_MB = 4096;
@@ -18,9 +21,13 @@ interface Props {
   onGoCatalog: () => void;
   onGoSettings: () => void;
   art: ArtSet | null;
+  play: PlayState;
+  detect: Detect | undefined;
+  searching: boolean;
+  onSearch: () => void;
 }
 
-export function Home({ inspect, error, loading, steamError, detecting, onUsePath, onRefresh, onGoCatalog, onGoSettings, art }: Props) {
+export function Home({ inspect, error, loading, steamError, detecting, onUsePath, onRefresh, onGoCatalog, onGoSettings, art, play, detect, searching, onSearch }: Props) {
   const { t, T, tc } = useI18n();
 
   if (detecting || (loading && !inspect)) {
@@ -47,7 +54,12 @@ export function Home({ inspect, error, loading, steamError, detecting, onUsePath
           <Badge tone="warn">{t("home.noInstall")}</Badge>
         </div>
         {error && <ErrorState title={t("home.invalidPath")} message={tc(error)} />}
-        <section>
+        <section aria-labelledby="h-find">
+          <h2 id="h-find">{t("home.find")}</h2>
+          <DetectPanel data={detect} searching={searching} onSearch={onSearch} onUse={onUsePath} />
+        </section>
+        <section aria-labelledby="h-manual-path">
+          <h2 id="h-manual-path">{t("home.manualPath")}</h2>
           <PathForm onUsePath={onUsePath} />
         </section>
       </>
@@ -67,7 +79,7 @@ export function Home({ inspect, error, loading, steamError, detecting, onUsePath
         </div>
         <div className="head-side">
           {art?.logo && <img className="hero-logo" src={art.logo} alt="Team Fortress 2" />}
-          {sys.game_running ? <Badge tone="block">{t("home.closeGame")}</Badge> : <Badge tone="ok">{t("home.ready")}</Badge>}
+          <PlayButton play={play} />
         </div>
       </div>
 
@@ -85,7 +97,7 @@ export function Home({ inspect, error, loading, steamError, detecting, onUsePath
                 <dt>{t("home.build")}</dt>
                 <dd>{inst.build_id ?? <span className="muted">{t("home.notInformed")}</span>}</dd>
                 <dt>{t("home.detection")}</dt>
-                <dd>{inst.source === "steam" ? "Steam" : t("home.manual")}</dd>
+                <dd>{inst.source === "steam" ? "Steam" : inst.source === "scan" ? t("home.scan") : t("home.manual")}</dd>
                 <dt>{t("home.system")}</dt>
                 <dd>{sys.os}</dd>
               </dl>

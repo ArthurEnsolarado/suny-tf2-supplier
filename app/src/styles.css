@@ -441,3 +441,67 @@ a { color: var(--accent); }
 .md ul { margin: 0 0 8px; padding-left: 22px; }
 .md li { margin-bottom: 3px; }
 .md code { background: var(--bar); border-radius: 3px; padding: 1px 6px; font-size: 13px; }
+
+/* ===== v0.7.3: ícones, espaçamento, jogar no cartão, prévia nos cards ===== */
+.spin { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+/* abas com ícone */
+.tab { display: inline-flex; align-items: center; gap: 8px; }
+.tab svg { width: 18px; height: 18px; flex: none; }
+@media (max-width: 1280px) { .tab svg { display: none; } }
+
+/* ícone das categorias (as que não são classe do jogo) */
+.cat-glyph { width: 22px; height: 22px; flex: none; color: var(--muted); }
+.cat[aria-pressed="true"] .cat-glyph { color: var(--ink); }
+.gal-nav svg { width: 26px; height: 26px; }
+.btn svg, .badge svg, .box svg { stroke-linecap: round; stroke-linejoin: round; }
+
+/* cabeçalho das categorias sempre por cima da lista (com a busca ativa os itens ficam translúcidos e cobriam o título) */
+.cats h2 { z-index: 4; }
+.cats ul { position: relative; z-index: 0; }
+
+/* botão de idioma não corta: divide a largura do painel */
+.cols .toggle { display: flex; width: 100%; }
+.cols .toggle button { flex: 1 1 0; min-width: 0; padding-left: 8px; padding-right: 8px; }
+
+/* respiro em volta de linhas de botões nos painéis */
+.cols section .row, .state .row { margin-top: 14px; margin-bottom: 12px; row-gap: 10px; }
+.cols section .row + .use { margin-top: 18px; }
+.cols section h3 { margin-top: 20px; }
+.btn.flat:disabled { box-shadow: inset 0 0 0 2px var(--line); color: var(--muted); opacity: 0.75; }
+
+/* ficha: a janela acompanha o conteúdo (antes esticava até o fim da tela e deixava um vazio enorme) */
+.modal { height: auto; max-height: calc(100vh - 32px); }
+.gallery-main.empty { aspect-ratio: auto; min-height: 92px; display: flex; flex-direction: row; gap: 12px; align-items: center; justify-content: center; font-weight: 700; }
+.gallery-main.empty svg { width: 26px; height: 26px; }
+
+/* prévia do som direto no card */
+.cardwrap { position: relative; }
+.card-play { position: absolute; top: 10px; right: 10px; width: 44px; height: 44px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; background: var(--accent); color: var(--ink); box-shadow: var(--shadow); }
+.card-play svg { width: 20px; height: 20px; }
+.card-play:hover { background: oklch(0.86 0.13 80); }
+.card-play.playing { background: var(--green); }
+.card-play.error { background: var(--red); color: var(--cream); }
+.card-play-msg { position: absolute; left: 8px; right: 62px; top: 10px; font-size: 12px; line-height: 1.25; padding: 5px 8px; border-radius: 3px; background: oklch(0.15 0.01 60 / 0.88); color: var(--cream); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; pointer-events: none; }
+.card-play-msg[role="alert"] { color: oklch(0.85 0.1 25); }
+
+/* jogar no cartão do Início */
+.btn.play.big { font-size: 24px; padding: 12px 28px 9px; min-height: 54px; }
+.btn.play.big svg { width: 22px; height: 22px; }
+.play-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.play-error { max-width: 300px; font-size: 13px; padding: 6px 10px; border-radius: 3px; background: var(--panel); color: oklch(0.82 0.1 25); }
+
+/* caminho do jogo e procura */
+.path-status { margin-top: 10px; min-height: 1.5em; }
+.path-root { margin-top: 6px; overflow-wrap: anywhere; }
+.detect { margin-top: 6px; }
+.detect-result { margin-top: 14px; }
+.detect-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.detect-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: oklch(1 0 0 / 0.06); border-radius: 4px; padding: 10px 12px; }
+.detect-list li > div { min-width: 0; }
+.detect-detail { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; color: var(--muted); }
+.detect-detail li { margin: 3px 0; overflow-wrap: anywhere; }
+.detect-detail .hit { color: var(--green); }
+.detect summary, .job summary { cursor: pointer; color: var(--cream); font-weight: 700; }

@@ -22,5 +22,9 @@ sysinfo = { version = "0.37", default-features = false, features = ["system", "d
 thiserror = "2"
 tracing = "0.1"
 
+# Janela de escolher pasta (nativa do Windows)
+[target.'cfg(windows)'.dependencies]
+rfd = { version = "0.15", default-features = false }
+
 [dev-dependencies]
 tiny_http = "0.12"

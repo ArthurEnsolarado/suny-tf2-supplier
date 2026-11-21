@@ -7,12 +7,15 @@ export interface Installation {
   root: string;
   tf_dir: string;
   build_id: number | null;
-  source: "steam" | "manual";
+  source: "steam" | "manual" | "scan";
 }
 
 export interface Detect {
   installations: Installation[];
   steam_error: string | null;
+  steam_dir: string | null;
+  /** Pastas comuns olhadas além do Steam, e se o jogo estava lá. */
+  tried: { path: string; found: boolean }[];
 }
 
 export interface Snapshot {
@@ -229,7 +232,7 @@ export interface AppInfo {
   cache_dir: string;
   cache_bytes: number;
   casual_bytes: number;
-  extractors: { rar: string[]; "7z": string[] };
+  extractors: { rar: string[]; "7z": string[] };  // ids: 7zip, winrar, tar
 }
 
 export interface ReleaseNote {

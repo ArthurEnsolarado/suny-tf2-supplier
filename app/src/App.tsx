@@ -10,16 +10,16 @@ import { Settings } from "./screens/Settings";
 import { UpdateDialog } from "./screens/UpdateDialog";
 import { useUpdate } from "./update";
 import type { ArtSet, CasualStatus, Detect, GameIcons, Inspect } from "./types";
-import { Icon, useAsync } from "./ui";
+import { Icon, useAsync, type IconName } from "./ui";
 
 type Tab = "home" | "browse" | "casual" | "installed" | "settings";
 
-const TABS: { id: Tab; label: TKey }[] = [
-  { id: "home", label: "tab.home" },
-  { id: "browse", label: "tab.browse" },
-  { id: "casual", label: "tab.casual" },
-  { id: "installed", label: "tab.installed" },
-  { id: "settings", label: "tab.settings" },
+const TABS: { id: Tab; label: TKey; icon: IconName }[] = [
+  { id: "home", label: "tab.home", icon: "home" },
+  { id: "browse", label: "tab.browse", icon: "catalog" },
+  { id: "casual", label: "tab.casual", icon: "casual" },
+  { id: "installed", label: "tab.installed", icon: "installed" },
+  { id: "settings", label: "tab.settings", icon: "settings" },
 ];
 
 const STORE_KEY = "suny.installPath";
@@ -65,7 +65,7 @@ function useGameRunning(path: string | undefined): boolean {
 }
 
 export function App() {
-  const { t, T, tc } = useI18n();
+  const { t, T } = useI18n();
   const [tab, setTab] = useState<Tab>("home");
   // Abas já abertas continuam montadas (escondidas): o Catálogo não perde filtros nem itens ao ir e voltar.
   const [seen, setSeen] = useState<Set<Tab>>(new Set<Tab>(["home"]));
@@ -112,11 +112,20 @@ export function App() {
     );
   };
 
-  const autoDetect = () => {
-    writeStored(STORE_KEY, null);
-    setPathError(undefined);
-    setPath(undefined);
+  // Procura manual (Início sem jogo e Configurações): mostra o que achou e o que olhou.
+  const [manualDetect, setManualDetect] = useState<Detect | undefined>();
+  const [detecting, setDetecting] = useState(false);
+  const detectNow = () => {
+    setDetecting(true);
+    call<Detect>("detect").then(
+      (d) => {
+        setManualDetect(d);
+        setDetecting(false);
+      },
+      () => setDetecting(false),
+    );
   };
+  const detectResult = manualDetect ?? detect.data ?? undefined;
 
   // Arte do jogo: lida do Steam do usuário. Se falhar, o app segue sem imagens.
   const art = useAsync<ArtSet | null>(() => call<ArtSet>("art").catch(() => null), []);
@@ -189,26 +198,12 @@ export function App() {
         <nav className="tabs" aria-label={t("nav.sections")}>
           {TABS.map((x) => (
             <button key={x.id} className="tab" aria-current={tab === x.id ? "page" : undefined} onClick={() => go(x.id)}>
+              <Icon name={x.icon} />
               {t(x.label)}
             </button>
           ))}
         </nav>
         <div className="top-actions">
-          {launchError && (
-            <span className="launch-msg bad" role="status" aria-live="polite">
-              {tc(launchError)}
-            </span>
-          )}
-          <button
-            className={`btn play ${running ? "is-open" : ""}`}
-            onClick={play}
-            disabled={!canPlay}
-            aria-busy={launching}
-            title={running ? t("play.title.open") : launching ? t("play.title.launching") : !inspect.data ? t("play.title.noInstall") : t("play.title.ready")}
-          >
-            <Icon name={running ? "check" : "play"} filled={!running} />
-            {running ? t("play.open") : launching ? t("play.launching") : t("play.button")}
-          </button>
           <div className="chip" title={t("build.title")}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="square" aria-hidden="true">
               <path d="M4 7h16M4 12h16M4 17h10" />
@@ -248,6 +243,10 @@ export function App() {
             art={art.data ?? null}
             onGoCatalog={() => go("browse")}
             onGoSettings={() => go("settings")}
+            play={{ running, launching, canPlay, error: launchError, onPlay: play }}
+            detect={detectResult}
+            searching={detecting}
+            onSearch={detectNow}
           />
         )}
         {seen.has("browse") && (
@@ -283,7 +282,9 @@ export function App() {
             inspect={inspectView}
             pathError={pathError}
             onUsePath={usePath}
-            onAutoDetect={autoDetect}
+            detect={detectResult}
+            detecting={detecting}
+            onDetect={detectNow}
             quickprecache={quickprecache}
             onQuickprecache={(v) => {
               setQuickprecache(v);

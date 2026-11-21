@@ -48,6 +48,15 @@ pub enum Extractor {
 }
 
 impl Extractor {
+    /// Identificador estável para a interface traduzir o nome (`7zip`, `winrar`, `tar`).
+    pub fn id(&self) -> &'static str {
+        match self {
+            Extractor::SevenZip(_) => "7zip",
+            Extractor::UnRar(_) => "winrar",
+            Extractor::Tar(_) => "tar",
+        }
+    }
+
     pub fn name(&self) -> &'static str {
         match self {
             Extractor::SevenZip(_) => "7-Zip",

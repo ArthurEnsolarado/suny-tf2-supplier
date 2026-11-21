@@ -2,16 +2,18 @@ import { useState } from "react";
 import { call } from "../api";
 import { fmtBytes } from "../format";
 import { LANGS, useI18n } from "../i18n";
-import type { AppInfo, Inspect, UpdateInfo } from "../types";
+import type { AppInfo, Detect, Inspect, UpdateInfo } from "../types";
 import { Badge, ErrorState, useAsync } from "../ui";
+import { DetectPanel } from "./DetectPanel";
 import { PathForm, PathText } from "./PathForm";
 
 interface Props {
   inspect: Inspect | undefined;
   pathError: string | undefined;
   onUsePath: (p: string) => void;
-  /** Esquece a pasta guardada e volta a procurar o jogo pelo Steam. */
-  onAutoDetect: () => void;
+  detect: Detect | undefined;
+  detecting: boolean;
+  onDetect: () => void;
   quickprecache: boolean;
   onQuickprecache: (v: boolean) => void;
   update: { info: UpdateInfo | null; checking: boolean; error: string | undefined; check: () => void };
@@ -20,7 +22,7 @@ interface Props {
   onOpenUpdate: () => void;
 }
 
-export function Settings({ inspect, pathError, onUsePath, onAutoDetect, quickprecache, onQuickprecache, update, autoUpdate, onAutoUpdate, onOpenUpdate }: Props) {
+export function Settings({ inspect, pathError, onUsePath, detect, detecting, onDetect, quickprecache, onQuickprecache, update, autoUpdate, onAutoUpdate, onOpenUpdate }: Props) {
   const { t, T, tc, lang, setLang } = useI18n();
   const info = useAsync<AppInfo>(() => call<AppInfo>("app_info"), []);
   const [cleared, setCleared] = useState<string | undefined>();
@@ -39,7 +41,8 @@ export function Settings({ inspect, pathError, onUsePath, onAutoDetect, quickpre
   const open = (which: "casual" | "cache") =>
     call("open_folder", { which }).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
 
-  const names = (list: string[]) => (list.length ? list.join(", ") : null);
+  const extractor = (id: string) => (id === "7zip" ? "7-Zip" : id === "winrar" ? "WinRAR" : t("settings.formats.tar"));
+  const names = (list: string[]) => (list.length ? list.map(extractor).join(", ") : null);
 
   return (
     <>
@@ -84,11 +87,8 @@ export function Settings({ inspect, pathError, onUsePath, onAutoDetect, quickpre
             )}
             <PathForm onUsePath={onUsePath} />
             {pathError && <ErrorState title={t("home.invalidPath")} message={tc(pathError)} />}
-            <p>
-              <button className="btn flat" onClick={onAutoDetect}>
-                {t("settings.tf2.auto")}
-              </button>
-            </p>
+            <h3>{t("settings.tf2.find")}</h3>
+            <DetectPanel data={detect} searching={detecting} onSearch={onDetect} onUse={onUsePath} />
           </section>
 
           <section aria-labelledby="h-casual">

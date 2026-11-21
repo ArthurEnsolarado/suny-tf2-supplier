@@ -1,25 +1,80 @@
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  CircleX,
+  Download,
+  FolderOpen,
+  Gamepad2,
+  House,
+  Info,
+  LayoutGrid,
+  LoaderCircle,
+  Minus,
+  Package,
+  PackageCheck,
+  Pause,
+  Play,
+  RefreshCw,
+  Search,
+  Settings,
+  TriangleAlert,
+  Volume2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "./i18n";
+
+/* ---------- ícones: Lucide (ISC), traço uniforme em todo o app ---------- */
+
+const ICONS = {
+  search: Search,
+  folder: FolderOpen,
+  refresh: RefreshCw,
+  sound: Volume2,
+  box: Package,
+  play: Play,
+  pause: Pause,
+  check: Check,
+  x: X,
+  left: ChevronLeft,
+  right: ChevronRight,
+  download: Download,
+  spinner: LoaderCircle,
+  home: House,
+  catalog: LayoutGrid,
+  casual: Gamepad2,
+  installed: PackageCheck,
+  settings: Settings,
+} satisfies Record<string, LucideIcon>;
+
+export type IconName = keyof typeof ICONS;
+
+/** `filled` preenche o desenho (usado no triângulo de play). */
+export function Icon({ name, filled }: { name: IconName; filled?: boolean }) {
+  const C = ICONS[name];
+  return <C aria-hidden="true" strokeWidth={2.4} absoluteStrokeWidth fill={filled ? "currentColor" : "none"} className={name === "spinner" ? "spin" : undefined} />;
+}
 
 /* ---------- selo de estado: a assinatura do app (faixa em ângulo, como no placar do TF2) ---------- */
 
 export type Tone = "ok" | "warn" | "block" | "neutral" | "info";
 
-const ICONS: Record<Tone, string> = {
-  ok: "M4 12l5 5L20 6",
-  warn: "M12 4v10M12 18v2",
-  block: "M5 5l14 14M19 5L5 19",
-  neutral: "M5 12h14",
-  info: "M12 8v1M12 12v7",
+const TONE_ICON: Record<Tone, LucideIcon> = {
+  ok: Check,
+  warn: TriangleAlert,
+  block: CircleX,
+  neutral: Minus,
+  info: Info,
 };
 
 /** Estado nunca depende só de cor: todo selo tem palavra e símbolo. */
 export function Badge({ tone, children, small }: { tone: Tone; children: ReactNode; small?: boolean }) {
+  const C = TONE_ICON[tone];
   return (
     <span className={`badge ${tone === "ok" ? "" : tone} ${small ? "small" : ""}`.trim()}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="square" aria-hidden="true">
-        <path d={ICONS[tone]} />
-      </svg>
+      <C aria-hidden="true" strokeWidth={3} absoluteStrokeWidth />
       {children}
     </span>
   );
@@ -27,33 +82,11 @@ export function Badge({ tone, children, small }: { tone: Tone; children: ReactNo
 
 /** Bolinha de situação (como o ponto "Online" do jogo): verde com visto ou vermelha com X. */
 export function Box({ ok }: { ok: boolean }) {
+  const C = ok ? Check : X;
   return (
     <span className={`box ${ok ? "" : "bad"}`} aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="square">
-        <path d={ok ? ICONS.ok : ICONS.block} />
-      </svg>
+      <C strokeWidth={3.4} absoluteStrokeWidth />
     </span>
-  );
-}
-
-/* ---------- ícones dos botões (desenhados aqui, sem arte da Valve) ---------- */
-
-const GLYPHS = {
-  search: "M10 4a6 6 0 100 12 6 6 0 000-12zM15 15l6 6",
-  folder: "M3 7h6l2 2h10v10H3z",
-  refresh: "M20 12a8 8 0 11-3-6.2M20 4v5h-5",
-  sound: "M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 010 6",
-  box: "M4 8l8-4 8 4v8l-8 4-8-4zM4 8l8 4 8-4M12 12v8",
-  play: "M7 4l13 8-13 8z",
-  pause: "M8 5v14M16 5v14",
-  check: "M4 12l5 5L20 6",
-} as const;
-
-export function Icon({ name, filled }: { name: keyof typeof GLYPHS; filled?: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="3" strokeLinecap="square" strokeLinejoin="miter" aria-hidden="true">
-      <path d={GLYPHS[name]} />
-    </svg>
   );
 }
 

@@ -4,9 +4,11 @@ import { fmtBytes, fmtDate, fmtInt } from "../format";
 import { useI18n, type TKey } from "../i18n";
 import type { Category, Details, GameIcons, Kind, Page, Sort, Summary } from "../types";
 import { Badge, ErrorState, Icon, useAsync } from "../ui";
-import { Analyzer } from "./Analyzer";
+import { CatGlyph } from "../catIcons";
+import { useSoundPreview } from "../useSoundPreview";
+import { Analyzer, AUTO_ANALYZE_MAX } from "./Analyzer";
 import { CasualAddBox } from "./CasualAddBox";
-import { InstallBox } from "./InstallBox";
+import { InstallBox, SUPPORTED } from "./InstallBox";
 
 /** Itens pedidos por vez. A grade tem 5 colunas, então 25 fecha 5 linhas. */
 const PER_PAGE = 25;
@@ -92,6 +94,7 @@ function useInfinite(key: string, fetchPage: (page: number) => Promise<Page<Summ
 
 export function Browse({ installRoot, installed, icons, onChanged, gameRunning, casual }: BrowseProps) {
   const { t, tc } = useI18n();
+  const sound = useSoundPreview();
   const [kind, setKind] = useState<Kind>("Mod");
   const [sort, setSort] = useState<Sort>("MostDownloaded");
   const [category, setCategory] = useState<number | undefined>();
@@ -184,6 +187,7 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
       </form>
       {searching && <p className="muted">{t("browse.search.note")}</p>}
 
+      <audio ref={sound.audioRef} onEnded={sound.onEnded} />
       <div className="browse">
         <CategoryTree
           kind={kind}
@@ -215,7 +219,7 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
                       </li>
                     ))
                   : list.items.map((r) => (
-                      <li key={r.id}>
+                      <li key={r.id} className="cardwrap">
                         <button className="card" onClick={() => setOpen({ kind, id: r.id })} aria-label={t("browse.open", { name: r.name })}>
                           <span className={`card-img ${r.thumb ? "" : "noimg"}`}>
                             {r.thumb ? (
@@ -242,6 +246,27 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
                             <span className="likes">♥ {fmtInt(r.like_count)}</span>
                           </span>
                         </button>
+                        {kind === "Sound" && (
+                          <button
+                            className={`card-play ${sound.cur?.id === r.id ? sound.cur.state : ""}`}
+                            onClick={() => sound.toggle(r.id)}
+                            aria-label={`${sound.cur?.id === r.id && sound.cur.state === "playing" ? t("card.stop") : t("card.listen")}: ${r.name}`}
+                            title={sound.cur?.id === r.id && sound.cur.state === "error" ? t("card.previewFailed", { msg: tc(sound.cur.msg ?? "") }) : t("card.listen")}
+                          >
+                            <Icon name={sound.cur?.id === r.id ? (sound.cur.state === "loading" ? "spinner" : sound.cur.state === "playing" ? "pause" : "x") : "play"} filled={!(sound.cur?.id === r.id)} />
+                          </button>
+                        )}
+                        {kind === "Sound" && sound.cur?.id === r.id && sound.cur.state === "error" && (
+                          <span className="card-play-msg" role="alert">
+                            {t("card.previewFailed", { msg: tc(sound.cur.msg ?? "") })}
+                          </span>
+                        )}
+                        {kind === "Sound" && sound.cur?.id === r.id && sound.cur.state === "playing" && (
+                          <span className="card-play-msg" role="status">
+                            {sound.cur.name}
+                            {(sound.cur.total ?? 0) > 1 ? ` · ${t("card.moreSounds", { n: (sound.cur.total ?? 1) - 1 })}` : ""}
+                          </span>
+                        )}
                       </li>
                     ))}
               </ul>
@@ -343,7 +368,7 @@ function CategoryTree({
             {isLeaf ? "" : isOpen ? "▾" : "▸"}
           </button>
           <button className="cat" aria-pressed={selected === c.id} disabled={disabled} onClick={() => onSelect(c.id, myPath)}>
-            {icon && <img className="cat-icon" src={icon} alt="" />}
+            {icon ? <img className="cat-icon" src={icon} alt="" /> : <CatGlyph name={c.name} />}
             <span>{ck ? c.name.replace(/^the\s+/i, "") : c.name}</span>
             <span className="count">{fmtInt(c.item_count)}</span>
           </button>
@@ -475,6 +500,10 @@ function Ficha({
   }, [go]);
 
   const cur = imgs[idx];
+  const soundFile =
+    kind === "Sound"
+      ? d.data?.files.find((f) => !(f.analysis_warnings && "contains_exe" in f.analysis_warnings) && SUPPORTED.includes(f.file_name.toLowerCase().split(".").pop() ?? "") && f.size <= AUTO_ANALYZE_MAX)
+      : undefined;
   const desc = d.data?.description ?? null;
   const longDesc = !!desc && desc.length > 700;
   const shown = desc && longDesc && !moreDesc ? `${desc.slice(0, 700).trimEnd()}…` : desc;
@@ -501,17 +530,18 @@ function Ficha({
                     <img src={cur.url} alt={t("ficha.imageOf", { name: d.data.name, i: idx + 1, total: count })} referrerPolicy="no-referrer" />
                   </button>
                 ) : (
-                  <div className="gallery-main empty" aria-hidden="true">
+                  <div className="gallery-main empty">
                     <Icon name={kind === "Sound" ? "sound" : "box"} />
+                    <span>{t("ficha.noImages")}</span>
                   </div>
                 )}
                 {count > 1 && (
                   <>
                     <button className="gal-nav prev" onClick={() => go(-1)} aria-label={t("ficha.prev")}>
-                      ‹
+                      <Icon name="left" />
                     </button>
                     <button className="gal-nav next" onClick={() => go(1)} aria-label={t("ficha.next")}>
-                      ›
+                      <Icon name="right" />
                     </button>
                     <span className="gal-count" aria-hidden="true">
                       {idx + 1} / {count}
@@ -527,6 +557,13 @@ function Ficha({
                     </button>
                   ))}
                 </div>
+              )}
+
+              {soundFile && (
+                <>
+                  <h3>{t("ficha.listen")}</h3>
+                  <Analyzer key={`s${soundFile.id}`} installRoot={installRoot} kind={kind} modId={id} file={soundFile} icons={icons} auto view="sounds" />
+                </>
               )}
 
               <h3>{t("ficha.about")}</h3>
@@ -631,7 +668,7 @@ function Ficha({
                         <code>MD5 {f.md5}</code>
                       </div>
                     )}
-                    <Analyzer key={`a${f.id}`} installRoot={installRoot} kind={kind} modId={id} file={f} icons={icons} />
+                    <Analyzer key={`a${f.id}`} installRoot={installRoot} kind={kind} modId={id} file={f} icons={icons} hideSounds={soundFile?.id === f.id} />
                     <CasualAddBox key={`c${f.id}`} kind={kind} modId={id} file={f} ready={casual.ready} unknown={casual.unknown} onGoCasual={casual.onGo} onAdded={casual.onAdded} />
                     <InstallBox key={f.id} installRoot={installRoot} kind={kind} modId={id} file={f} gameRunning={gameRunning} onChanged={onChanged} />
                   </div>
@@ -652,7 +689,7 @@ function Ficha({
                     }}
                     aria-label={t("ficha.prev")}
                   >
-                    ‹
+                    <Icon name="left" />
                   </button>
                   <button
                     className="gal-nav next"
@@ -662,7 +699,7 @@ function Ficha({
                     }}
                     aria-label={t("ficha.next")}
                   >
-                    ›
+                    <Icon name="right" />
                   </button>
                 </>
               )}

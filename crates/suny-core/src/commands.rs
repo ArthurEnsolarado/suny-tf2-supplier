@@ -119,6 +119,9 @@ struct CasualApplyArgs {
     options: casual::ApplyOptions,
 }
 
+/// Prévia direto do catálogo: só arquivos de até 25 MiB (o resto pede o Analisar da ficha).
+const PREVIEW_MAX_FILE: u64 = 25 << 20;
+
 /// Limite de download de um mod (1 GiB).
 const MAX_DOWNLOAD: u64 = 1 << 30;
 
@@ -285,10 +288,78 @@ fn resolve(path: &str) -> Result<Installation, String> {
 
 pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, String> {
     match name {
-        "detect" => Ok(match steam::find_installations() {
-            Ok(list) => json!({ "installations": list, "steam_error": null }),
-            Err(e) => json!({ "installations": [], "steam_error": e.to_string() }),
-        }),
+        // Steam + pastas comuns. `tried` e `steam_dir` explicam o resultado quando nada é achado.
+        "detect" => tokio::task::spawn_blocking(|| out(steam::detect_all())).await.map_err(|e| e.to_string())?,
+
+        // O caminho digitado serve? Diz o motivo quando não (para a tela mostrar na hora).
+        "validate_path" => {
+            let p: PathArgs = args(a)?;
+            tokio::task::spawn_blocking(move || {
+                if p.path.trim().is_empty() {
+                    return Ok::<Value, String>(json!({ "ok": false, "empty": true }));
+                }
+                Ok(match Installation::from_path(Path::new(&p.path)) {
+                    Ok(i) => json!({
+                        "ok": true,
+                        "root": i.root,
+                        "build_id": i.build_id,
+                        "has_custom": i.custom_dir().is_dir(),
+                    }),
+                    Err(e) => json!({ "ok": false, "error": e.to_string() }),
+                })
+            })
+            .await
+            .map_err(|e| e.to_string())?
+        }
+
+        // Janela nativa para escolher a pasta do jogo. Devolve `null` se o usuário cancelar.
+        "pick_folder" => tokio::task::spawn_blocking(|| {
+            #[cfg(windows)]
+            {
+                let picked = rfd::FileDialog::new().set_title("Team Fortress 2").pick_folder();
+                Ok::<Value, String>(json!({ "path": picked }))
+            }
+            #[cfg(not(windows))]
+            {
+                Err::<Value, String>("escolher pasta pela janela só existe no Windows".to_string())
+            }
+        })
+        .await
+        .map_err(|e| e.to_string())?,
+
+        // Prévia rápida de um som do catálogo: baixa o primeiro arquivo (cache) e devolve um áudio para tocar.
+        "sound_preview" => {
+            let p: DetailsArgs = args(a)?;
+            let details = client.details(p.kind, p.id).await.map_err(|e| e.to_string())?;
+            let file = details
+                .files
+                .iter()
+                .find(|f| !f.contains_exe() && archive::format_of(&f.file_name).is_some() && f.size <= PREVIEW_MAX_FILE)
+                .ok_or_else(|| "Este item não tem um arquivo pequeno o bastante para a prévia. Abra a ficha e use Analisar.".to_string())?;
+            let dest = cached_zip(p.kind, file.id);
+            if !dest.is_file() {
+                fetch_as_zip(client, file, &dest, MAX_ANALYSIS_DOWNLOAD).await?;
+            }
+            prune_cache(&analysis_cache_dir(), &dest);
+            let file_id = file.id;
+            tokio::task::spawn_blocking(move || -> Result<Value, String> {
+                let a = analysis::analyze_zip(&dest, None).map_err(|e| e.to_string())?;
+                let item = a
+                    .audio
+                    .iter()
+                    .find(|s| s.size <= analysis::MAX_PREVIEW_BYTES)
+                    .ok_or_else(|| "Este pacote não tem áudio que dê para tocar (.wav, .mp3 ou .ogg de até 12 MB).".to_string())?;
+                let (mime, bytes) = analysis::read_audio(&dest, &item.entry).map_err(|e| e.to_string())?;
+                Ok(json!({
+                    "file_id": file_id,
+                    "name": item.name,
+                    "total": a.audio_total,
+                    "data_url": format!("data:{mime};base64,{}", STANDARD.encode(bytes)),
+                }))
+            })
+            .await
+            .map_err(|e| e.to_string())?
+        }
 
         "inspect" => {
             let p: PathArgs = args(a)?;
@@ -415,7 +486,7 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
         // Dados para a tela de Configurações.
         "app_info" => tokio::task::spawn_blocking(|| {
             let l = casual::Layout::default();
-            let names = |f: archive::Format| archive::extractors_for(f).iter().map(|e| e.name()).collect::<Vec<_>>();
+            let names = |f: archive::Format| archive::extractors_for(f).iter().map(|e| e.id()).collect::<Vec<_>>();
             json!({
                 "version": env!("CARGO_PKG_VERSION"),
                 "casual_dir": l.root,
