@@ -21,3 +21,74 @@ open source yippee!!!! have fun or something, i main demoknight so i dont have t
 
 
 JUST ENJOY THE APP.
+
+---
+
+okay but for real, here's the stuff people actually ask:
+
+## what it does
+
+- **catalog**: mods and sounds straight from GameBanana, 5 columns, infinite scroll, categories, and a big page for each mod with all the screenshots, description, numbers and files.
+- **install**: `.zip`, `.rar` and `.7z`. goes into `tf/custom`, in a folder the app owns, and it never touches stuff it didn't put there. only with TF2 closed.
+- **analyze before installing**: shows what a mod changes (hitsound? demoman voice? weapons?), with the class icon, and you can **listen to the sounds** before you install anything.
+- **casual**: uses [cueki's Casual Preloader](https://gamebanana.com/tools/19049) so mods work in Valve's casual. add mods to a list, hit apply, hit revert if you hate it. the preloader is downloaded from the official release (size + SHA-256 checked), it's not copied into this repo.
+- **play button**: opens TF2 through Steam. greyed out while the game is open.
+- **english, español, português**: change it in Settings.
+- **updates**: the app checks the stable releases of this repo, tells you when a new one is out and shows the changelog. you decide when to update.
+
+## install it
+
+grab the `...-setup.exe` from the [releases page](https://github.com/ArthurEnsolarado/suny-tf2-supplier/releases) and run it, it's a normal wizard (pt-BR, English, Español). no admin needed, it installs for your user.
+
+windows might show a SmartScreen warning because the installer isn't code-signed yet. that's it, that's the "virus". you can check the SHA-256 in `SHA256SUMS.txt` next to the installer, or just build it yourself (below).
+
+## about the updater
+
+- it only looks at **stable** releases (no betas, no drafts) of this repo on GitHub.
+- it never sends anything about you. it's one public request to GitHub's API.
+- when you press update it downloads the installer, **checks the SHA-256** published with the release and only then opens it. no hash published = it refuses and sends you to the releases page.
+- you can turn the check off in Settings.
+
+## where the assets come from
+
+- the TF2 banner, logo and the class icons are **read from your own Steam / TF2 install while the app runs**. nothing from Valve is in this repo or in the installer.
+- mod images come from GameBanana's CDN and always show who made the mod.
+- the in-game style font (TF2 Build) is **not included**, its license isn't clear. drop `tf2build.ttf` in `app/public/fonts/` if you want it, otherwise the app uses a fallback font.
+- the app icon is mine.
+
+## what it touches on your pc
+
+| thing | where | when |
+|---|---|---|
+| mods you install | `tf/custom/<mod folder>` + `tf/custom/.suny/` (what was installed, so it can be removed cleanly) | install / remove, game closed |
+| casual mods | the preloader changes `tf2_misc_*.vpk`, `gameinfo.txt` and `custom/_casual_preloader_*` | apply / revert, game closed. it keeps a copy of `gameinfo.txt` first |
+| app data | `%LOCALAPPDATA%\suny-tf2-supplier\casual` (preloader, your casual list, backups) | casual setup |
+| temp downloads | `%TEMP%\suny-tf2-supplier` | analyze / update. clear it in Settings |
+
+after a TF2 update just apply again, the update undoes the mods (that's how the preloader works, not me).
+
+## build it yourself
+
+you need [Rust](https://rustup.rs) (1.94+), Node 20+ and Windows (the casual part needs the Windows preloader).
+
+```powershell
+npm --prefix app ci
+cargo test -p suny-core            # the core has tests, run them
+npm --prefix app run dev           # ui only, in the browser (also run the dev server below)
+cargo run -p suny-core --example devserver
+cd app; npx tauri build --bundles nsis   # makes the installer
+```
+
+the installer ends up in `target/release/bundle/nsis/` (or wherever your `CARGO_TARGET_DIR` points).
+
+more details in [`docs/`](docs/) (they're in portuguese, sorry) and the credits are in [`CREDITS.md`](CREDITS.md).
+
+## credits
+
+- **cueki** for the [Casual Preloader](https://gamebanana.com/tools/19049) (GPL-3.0). this app is basically a nice face for it.
+- **GameBanana** and every mod author, they're credited inside the app.
+- Tauri, React, Vite and the Rust crates in `Cargo.toml`.
+
+TF2 is a Valve trademark. this is not affiliated with Valve or GameBanana. league rules (like RGL) ban custom particles, check before you join a match.
+
+license: GPL-3.0-or-later, see [`LICENSE`](LICENSE).
