@@ -1,0 +1,34 @@
+target/
+*.log
+node_modules/
+.spike/
+.backup/
+app/dist/
+app/node_modules/
+app/src-tauri/gen/
+release/
+
+# --- adicionado para o repositório público ---
+dist/
+*.exe
+*.msi
+*.zip
+*.rar
+*.7z
+*.vpk
+*.tmp
+*.bak
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12
+# fonte TF2 Build: licença não confirmada, fica só no seu computador (veja app/public/fonts/README.txt)
+app/public/fonts/*.ttf
+app/public/fonts/*.otf
+app/public/fonts/*.woff*
+# cópias de teste do jogo e do preloader
+.spike/
+.backup/
+release/
