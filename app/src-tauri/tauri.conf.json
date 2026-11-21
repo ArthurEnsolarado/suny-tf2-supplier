@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Suny TF2 Supplier",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "identifier": "dev.suny.tf2supplier",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -51,7 +51,9 @@
           "Spanish"
         ],
         "installerIcon": "icons/icon.ico",
-        "startMenuFolder": "Suny TF2 Supplier"
+        "startMenuFolder": "Suny TF2 Supplier",
+        "sidebarImage": "installer/sidebar.bmp",
+        "headerImage": "installer/header.bmp"
       }
     },
     "resources": {

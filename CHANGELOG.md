@@ -3,6 +3,11 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.7.8
+
+### Changed
+- The installer now has its own art: the logo on the side of the wizard, a header banner, and the orange and brown colours of the app, instead of the default blue.
+
 ## 0.7.7
 
 ### Fixed
