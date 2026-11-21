@@ -191,7 +191,7 @@ export const pt = {
   "install.button": "Instalar em custom",
   "install.closeGame": "Feche o TF2 para instalar.",
   "install.confirm": "Baixa o arquivo e cria <b>uma pasta nova</b> em <b>tf/custom</b>. Não sobrescreve nada existente. O TF2 precisa estar fechado.",
-  "install.hint": "Só para jogar offline e em servidores da comunidade. No casual da Valve não aparece: para o casual, use Adicionar ao Casual.",
+  "install.hint": "Instala na pasta custom: vale offline e em servidores da comunidade. No casual da Valve só tende a aparecer com o Casual Preloader aplicado no jogo. O caminho certo para o casual é Adicionar ao Casual.",
   "install.confirmButton": "Confirmar e instalar",
   "install.busy": "Baixando e instalando…",
   "install.dontClose": "Não feche o app.",
@@ -199,7 +199,7 @@ export const pt = {
   "install.done": "{n} arquivo(s) em <b>{slug}</b>.",
   "install.skipped": "({n} ignorado(s): leia-me, imagens…)",
   "install.rgl": "Ligas como a RGL proíbem partículas customizadas.",
-  "install.notCasual": "Vale offline e em servidores de comunidade. <b>No casual da Valve não:</b> para o casual, use <i>Adicionar ao Casual</i> (aba Casual).",
+  "install.notCasual": "Vale offline e em servidores de comunidade. <b>No casual da Valve:</b> pode aparecer se o Casual Preloader estiver aplicado no jogo (já vimos acontecer), mas esse não é o caminho suportado. Para o casual, use <i>Adicionar ao Casual</i> (aba Casual).",
 
   // ---- adicionar ao casual (na ficha)
   "add.needSetup": "Para usar no casual, configure o Casual Preloader.",

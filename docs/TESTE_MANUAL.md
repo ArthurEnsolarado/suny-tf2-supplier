@@ -55,7 +55,7 @@ Mod sugerido: **POOT Hitsound** (Jotunn, 19 KB): aba **Sons**, categoria **Hitso
 - [ ] **Remover** pede confirmação e apaga só a pasta do POOT.
 
 Isso mexe na sua instalação real, mas só adiciona (e depois remove) uma pasta nova dentro de `custom`.
-Funciona offline e em servidores de comunidade. **No casual não vale**, porque o casual ignora `custom`.
+Funciona offline e em servidores de comunidade. No casual da Valve pode aparecer se o Casual Preloader estiver aplicado no jogo (visto num teste real com o Eyecrafter), mas o caminho suportado para o casual é *Adicionar ao Casual*.
 
 ## 7. O que me contar se algo estranho aparecer
 - Uma captura de tela da janela, o texto exato de qualquer erro e o que você clicou antes.

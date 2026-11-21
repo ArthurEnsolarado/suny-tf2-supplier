@@ -3,6 +3,11 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.7.5
+
+### Fixed
+- The app told you that mods installed to `custom` never show up in Valve's casual. That was wrong as a blanket statement: in a real casual match a `custom` mod (The Eyecrafter) did show up while the Casual Preloader was applied to the game. The texts now say what is actually known: it can show up when the preloader is applied, but **Add to Casual** is still the supported way for casual.
+
 ## 0.7.4
 
 ### Fixed
@@ -11,7 +16,7 @@ Format: newest first. Versions follow `major.minor.patch`.
 - The window no longer overflows around 1500 px wide (the tab icons pushed the top bar out of the window).
 
 ### Changed
-- **Add to Casual** is the main (orange) button on a mod's page; **Install to custom** is secondary and now says right there that it only works offline and on community servers, not in Valve's casual.
+- **Add to Casual** is the main (orange) button on a mod's page; **Install to custom** is secondary and now says right there what it is for (offline play and community servers).
 - **The interface adapts to any screen.** Content has a maximum width and stays centered (ultrawide screens no longer stretch everything), the catalog grid picks its number of columns from the width, and on big screens (2K, 4K, ultrawide) the app scales itself up. Settings → Interface size lets you pick a fixed size instead. Checked from 920 x 600 up to 2560 x 720.
 
 ## 0.7.3

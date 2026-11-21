@@ -190,7 +190,7 @@ export const en: Record<Key, string> = {
   "install.button": "Install to custom",
   "install.closeGame": "Close TF2 to install.",
   "install.confirm": "Downloads the file and creates <b>a new folder</b> in <b>tf/custom</b>. It doesn't overwrite anything that exists. TF2 must be closed.",
-  "install.hint": "For offline play and community servers only. It won't show in Valve's casual: for casual, use Add to Casual.",
+  "install.hint": "Installs into the custom folder: works offline and on community servers. In Valve's casual it tends to show up only when the Casual Preloader is applied to the game. The proper way for casual is Add to Casual.",
   "install.confirmButton": "Confirm and install",
   "install.busy": "Downloading and installing…",
   "install.dontClose": "Don't close the app.",
@@ -198,7 +198,7 @@ export const en: Record<Key, string> = {
   "install.done": "{n} file(s) in <b>{slug}</b>.",
   "install.skipped": "({n} skipped: readme, images…)",
   "install.rgl": "Leagues like RGL ban custom particles.",
-  "install.notCasual": "Works offline and on community servers. <b>Not in Valve's casual:</b> for casual, use <i>Add to Casual</i> (Casual tab).",
+  "install.notCasual": "Works offline and on community servers. <b>In Valve's casual:</b> it can show up when the Casual Preloader is applied to the game (it did in testing), but that isn't the supported way. For casual, use <i>Add to Casual</i> (Casual tab).",
 
   // ---- add to casual (in the detail window)
   "add.needSetup": "To use this in casual, set up the Casual Preloader.",
