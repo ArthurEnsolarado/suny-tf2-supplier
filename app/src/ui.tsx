@@ -54,10 +54,10 @@ export type IconName = keyof typeof ICONS;
 /** `filled` preenche o desenho (usado no triângulo de play). */
 export function Icon({ name, filled }: { name: IconName; filled?: boolean }) {
   const C = ICONS[name];
-  return <C aria-hidden="true" strokeWidth={2.4} absoluteStrokeWidth fill={filled ? "currentColor" : "none"} className={name === "spinner" ? "spin" : undefined} />;
+  return <C aria-hidden="true" strokeWidth={2} absoluteStrokeWidth fill={filled ? "currentColor" : "none"} className={name === "spinner" ? "spin" : undefined} />;
 }
 
-/* ---------- selo de estado: a assinatura do app (faixa em ângulo, como no placar do TF2) ---------- */
+/* ---------- selo de estado ---------- */
 
 export type Tone = "ok" | "warn" | "block" | "neutral" | "info";
 

@@ -3,6 +3,14 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.9.0
+
+### Changed
+- **New look.** The app drops the TF2-menu style (orange tabs, slanted banners, cream buttons) for a calm dark interface: a **side menu** grouped into General, Mods and System, warm graphite surfaces, a single muted orange accent, thin borders and plain headings. On narrow windows the menu collapses to icons. The game's own art is now only a small touch on the Overview.
+- The font is now the system font (Segoe UI on Windows) everywhere; Lilita One stays only for the app name and the logo. Nothing new to download.
+- The Home tab's heading is now "Overview".
+- README screenshots retaken with the new look.
+
 ## 0.8.1
 
 ### Fixed

@@ -3,6 +3,9 @@ import type { Key } from "./pt";
 export const en: Record<Key, string> = {
   // ---- navigation and general
   "nav.sections": "Sections",
+  "nav.group.general": "General",
+  "nav.group.mods": "Mods",
+  "nav.group.system": "System",
   "tab.home": "Home",
   "tab.browse": "Catalog",
   "tab.casual": "Casual",
@@ -51,7 +54,7 @@ export const en: Record<Key, string> = {
   "home.giveFolder": "Enter the game's path below.",
   "home.noInstall": "No installation",
   "home.invalidPath": "Invalid path",
-  "home.title": "Installation sheet",
+  "home.title": "Overview",
   "home.subtitle": "State of TF2 and the Casual Preloader.",
   "home.closeGame": "Close the game",
   "home.ready": "Ready",

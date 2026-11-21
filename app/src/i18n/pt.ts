@@ -4,6 +4,9 @@
 export const pt = {
   // ---- navegação e geral
   "nav.sections": "Seções",
+  "nav.group.general": "Geral",
+  "nav.group.mods": "Mods",
+  "nav.group.system": "Sistema",
   "tab.home": "Início",
   "tab.browse": "Catálogo",
   "tab.casual": "Casual",
@@ -52,7 +55,7 @@ export const pt = {
   "home.giveFolder": "Informe o path do jogo abaixo.",
   "home.noInstall": "Sem instalação",
   "home.invalidPath": "Path inválido",
-  "home.title": "Ficha da instalação",
+  "home.title": "Visão geral",
   "home.subtitle": "Estado do TF2 e do Casual Preloader.",
   "home.closeGame": "Feche o jogo",
   "home.ready": "Pronto",

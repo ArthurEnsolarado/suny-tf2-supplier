@@ -15,12 +15,18 @@ import { Icon, useAsync, type IconName } from "./ui";
 
 type Tab = "home" | "browse" | "casual" | "installed" | "settings";
 
-const TABS: { id: Tab; label: TKey; icon: IconName }[] = [
-  { id: "home", label: "tab.home", icon: "home" },
-  { id: "browse", label: "tab.browse", icon: "catalog" },
-  { id: "casual", label: "tab.casual", icon: "casual" },
-  { id: "installed", label: "tab.installed", icon: "installed" },
-  { id: "settings", label: "tab.settings", icon: "settings" },
+/** Menu lateral: telas agrupadas pelo que o usuário quer fazer. */
+const NAV: { label: TKey; tabs: { id: Tab; label: TKey; icon: IconName }[] }[] = [
+  { label: "nav.group.general", tabs: [{ id: "home", label: "tab.home", icon: "home" }] },
+  {
+    label: "nav.group.mods",
+    tabs: [
+      { id: "browse", label: "tab.browse", icon: "catalog" },
+      { id: "casual", label: "tab.casual", icon: "casual" },
+      { id: "installed", label: "tab.installed", icon: "installed" },
+    ],
+  },
+  { label: "nav.group.system", tabs: [{ id: "settings", label: "tab.settings", icon: "settings" }] },
 ];
 
 const STORE_KEY = "suny.installPath";
@@ -135,9 +141,6 @@ export function App() {
 
   // Arte do jogo: lida do Steam do usuário. Se falhar, o app segue sem imagens.
   const art = useAsync<ArtSet | null>(() => call<ArtSet>("art").catch(() => null), []);
-  // Fundo: a versão desfocada do Steam (não repete o banner nítido do Início). Sem ela, borra o banner por CSS.
-  const backdrop = art.data?.hero_blur ?? art.data?.hero ?? null;
-  const backdropBlurred = !art.data?.hero_blur;
 
   // Casual Preloader dentro do app: configurado? quais mods? o jogo está com ele aplicado?
   const casual = useAsync<CasualStatus>(() => call<CasualStatus>("casual_status", { path }), [path]);
@@ -193,31 +196,38 @@ export function App() {
 
   return (
     <div className="app">
-      {backdrop && <div className={`backdrop ${backdropBlurred ? "soften" : ""}`} style={{ backgroundImage: `url(${backdrop})` }} aria-hidden="true" />}
-      <header className="topbar">
+      <aside className="sidebar">
         <div className="brand">
-          <img src={logo} alt="" width={44} height={44} />
+          <img src={logo} alt="" width={40} height={40} />
           <span>
-            suny&rsquo;s <b>tf2</b> supplier
+            suny&rsquo;s <b>tf2</b>
+            <br />
+            supplier
           </span>
         </div>
         <nav className="tabs" aria-label={t("nav.sections")}>
-          {TABS.map((x) => (
-            <button key={x.id} className="tab" aria-current={tab === x.id ? "page" : undefined} onClick={() => go(x.id)}>
-              <Icon name={x.icon} />
-              {t(x.label)}
-            </button>
+          {NAV.map((group) => (
+            <div key={group.label} role="group" aria-label={t(group.label)}>
+              <div className="nav-group" aria-hidden="true">
+                {t(group.label)}
+              </div>
+              {group.tabs.map((x) => (
+                <button key={x.id} className="tab" title={t(x.label)} aria-current={tab === x.id ? "page" : undefined} onClick={() => go(x.id)}>
+                  <Icon name={x.icon} />
+                  <span>{t(x.label)}</span>
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
-        <div className="top-actions">
+        <div className="side-foot">
           <div className="chip" title={t("build.title")}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="square" aria-hidden="true">
-              <path d="M4 7h16M4 12h16M4 17h10" />
-            </svg>
-            Build {build ?? "—"}
+            <Icon name="box" />
+            <span>Build {build ?? "—"}</span>
           </div>
         </div>
-      </header>
+      </aside>
+      <div className="main">
       <main className="sheet">
         {showBanner && (
           <div className="update-banner" role="status">
@@ -330,6 +340,7 @@ export function App() {
         </span>
         <span>{t("footer.right")}</span>
       </footer>
+      </div>
     </div>
   );
 }
