@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/logo.png" alt="Suny's TF2 Supplier" width="150">
+</p>
+
 DISCLAIMER, THE USAGE OF AI HAS BEEN USED IN THIS TOOL, WHY? CUZ I'M NOT SHERLOCK HOMES TO FIND ALL THE BUGS IN THIS DAMN APP DUDE. C'MON.
 
 
@@ -35,6 +39,18 @@ okay but for real, here's the stuff people actually ask:
 - **play button**: opens TF2 through Steam. greyed out while the game is open.
 - **english, español, português**: change it in Settings.
 - **updates**: the app checks the stable releases of this repo, tells you when a new one is out and shows the changelog. you decide when to update.
+
+## screenshots
+
+<p align="center">
+  <img src="docs/screenshots/home.png" alt="Home: game state, play button" width="49%">
+  <img src="docs/screenshots/catalog.png" alt="Catalog with sound previews" width="49%">
+  <img src="docs/screenshots/sound.png" alt="A sound's page with the sounds listed and a play button" width="49%">
+  <img src="docs/screenshots/casual.png" alt="Casual tab" width="49%">
+  <img src="docs/screenshots/settings.png" alt="Settings" width="49%">
+</p>
+
+(these were taken with the game's art turned off on purpose, so there's no Valve art in this repo. in the app you get the banner and class icons straight from your own TF2.)
 
 ## install it
 
