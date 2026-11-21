@@ -1,0 +1,58 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Suny TF2 Supplier",
+  "version": "0.7.0",
+  "identifier": "dev.suny.tf2supplier",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "suny's tf2 supplier",
+        "width": 1180,
+        "height": 780,
+        "minWidth": 920,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https://images.gamebanana.com; media-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "publisher": "ArthurEnsolarado",
+    "copyright": "GPL-3.0-or-later. Not affiliated with Valve.",
+    "category": "Utility",
+    "shortDescription": "TF2 mod launcher with GameBanana catalog and Casual Preloader",
+    "longDescription": "Mod launcher and manager for Team Fortress 2: GameBanana catalog, sound preview, Casual Preloader integration.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": true,
+        "languages": [
+          "PortugueseBR",
+          "English",
+          "Spanish"
+        ],
+        "installerIcon": "icons/icon.ico",
+        "startMenuFolder": "Suny TF2 Supplier"
+      }
+    }
+  }
+}

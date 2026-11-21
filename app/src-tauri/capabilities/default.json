@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissões da janela principal. Só o básico: o resto da lógica passa pelo comando `call`.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

@@ -1,0 +1,16 @@
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import "@fontsource/quicksand/latin-500";
+import "@fontsource/quicksand/latin-600";
+import "@fontsource/quicksand/latin-700";
+import { App } from "./App";
+import { LangProvider } from "./i18n";
+import "./styles.css";
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <LangProvider>
+      <App />
+    </LangProvider>
+  </StrictMode>,
+);

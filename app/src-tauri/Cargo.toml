@@ -1,0 +1,20 @@
+[package]
+name = "suny-tf2-supplier"
+description = "suny's tf2 supplier: gerenciador de mods de Team Fortress 2"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde_json = "1"
+suny-core = { path = "../../crates/suny-core" }
+
+[features]
+# Embute a interface (app/dist) no executável. O `tauri build` liga isso sozinho;
+# ao compilar com cargo direto, use: --features custom-protocol
+custom-protocol = ["tauri/custom-protocol"]
