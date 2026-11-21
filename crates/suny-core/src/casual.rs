@@ -211,6 +211,15 @@ pub struct Addon {
     pub size_bytes: u64,
     pub enabled: bool,
     pub source: Option<AddonSource>,
+    /// Tem a pasta `models/`: modelos (armas, cosméticos). No casual eles passam pelo pacote do preloader, que é lido
+    /// ANTES de `custom` e pede pré-carregamento (QuickPrecache) para os modelos aparecerem.
+    pub has_models: bool,
+    /// O mesmo item do GameBanana também está instalado em `custom` por este app. A cópia do Casual vence a de `custom`.
+    pub also_in_custom: bool,
+}
+
+fn dir_has_models(dir: &Path) -> bool {
+    std::fs::read_dir(dir.join("models")).map(|mut r| r.next().is_some()).unwrap_or(false)
 }
 
 /// Nome de pasta que o app aceita mexer: um item direto de `addons`, sem separador nem `..`.
@@ -247,7 +256,13 @@ fn read_meta(l: &Layout, name: &str) -> Option<AddonSource> {
 }
 
 pub fn list_addons(l: &Layout) -> Vec<Addon> {
+    list_addons_in(l, None)
+}
+
+/// Com a pasta `custom` do jogo, marca os mods que também estão instalados lá (mesmo item do GameBanana).
+pub fn list_addons_in(l: &Layout, custom: Option<&Path>) -> Vec<Addon> {
     let state = load_state(l);
+    let managed: Vec<(String, u64)> = custom.map(|c| crate::installer::list_managed(c).into_iter().map(|m| (m.meta.kind, m.meta.gb_id)).collect()).unwrap_or_default();
     let Ok(rd) = std::fs::read_dir(l.addons_dir()) else { return Vec::new() };
     let mut out: Vec<Addon> = rd
         .flatten()
@@ -264,9 +279,13 @@ pub fn list_addons(l: &Layout) -> Vec<Addon> {
                 .and_then(|t| serde_json::from_str::<Value>(&t).ok())
                 .and_then(|v| v.get("type").and_then(|t| t.as_str().map(str::to_string)))
                 .unwrap_or_else(|| "Unknown".into());
+            let source = read_meta(l, &name);
+            let also_in_custom = source.as_ref().is_some_and(|s| s.gb_id != 0 && managed.iter().any(|(k, id)| *k == s.kind && *id == s.gb_id));
             Some(Addon {
                 enabled: state.enabled.contains(&name),
-                source: read_meta(l, &name),
+                source,
+                has_models: dir_has_models(&e.path()),
+                also_in_custom,
                 name,
                 kind,
                 file_count: files,
@@ -885,7 +904,8 @@ pub async fn add_zip(l: Layout, zip_path: PathBuf, addon_name: String, source: A
                 }
             }
         })?;
-        Ok(json!({ "added": changed, "message": res["message"], "already_there": changed.is_empty() }))
+        let has_models = changed.iter().any(|n| dir_has_models(&l.addons_dir().join(n)));
+        Ok(json!({ "added": changed, "message": res["message"], "already_there": changed.is_empty(), "has_models": has_models }))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1069,7 +1089,7 @@ pub fn status(l: &Layout, tf_dir: Option<&Path>, game_applied: Option<bool>) -> 
         "version": installed_version(l),
         "pinned_version": ReleaseSpec::pinned().version,
         "root": l.root,
-        "addons": if rt == Runtime::Missing { Vec::new() } else { list_addons(l) },
+        "addons": if rt == Runtime::Missing { Vec::new() } else { list_addons_in(l, tf_dir.map(|d| d.join("custom")).as_deref()) },
         "applied_here": applied_here,
         "game_applied": game_applied,
         "launch_options": launch,
@@ -1162,6 +1182,33 @@ mod tests {
         assert_eq!((list[0].file_count, list[0].size_bytes, list[0].kind.as_str()), (2, 5 + 16, "Sound"));
         assert_eq!(list[0].source.as_ref().unwrap().gb_id, 1);
         assert_eq!(list[1].kind, "Unknown");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn addons_know_when_they_have_models_and_when_they_are_also_installed_in_custom() {
+        let root = tmp("models_flag");
+        let l = Layout::new(&root);
+        std::fs::create_dir_all(l.addons_dir().join("Espada").join("models").join("weapons")).unwrap();
+        std::fs::write(l.addons_dir().join("Espada").join("models").join("weapons").join("a.mdl"), b"x").unwrap();
+        std::fs::create_dir_all(l.addons_dir().join("Som").join("sound")).unwrap();
+        std::fs::write(l.addons_dir().join("Som").join("sound").join("a.wav"), b"x").unwrap();
+        let src = |name: &str, id: u64| AddonSource { kind: "Mod".into(), gb_id: id, file_id: 1, file_name: "a.zip".into(), name: name.into(), version: None, submitter: None, profile_url: String::new(), md5: None, added_at: 0 };
+        write_atomic(&l.meta_dir().join("Espada.json"), &serde_json::to_vec(&src("Espada", 7)).unwrap()).unwrap();
+        write_atomic(&l.meta_dir().join("Som.json"), &serde_json::to_vec(&src("Som", 8)).unwrap()).unwrap();
+
+        // o item 7 também foi instalado em custom por este app
+        let custom = root.join("custom");
+        let zip = root.join("m.zip");
+        make_zip(&zip, &[("sound/ui/x.wav", b"RIFF")]);
+        let meta = crate::installer::ModMeta { gb_id: 7, kind: "Mod".into(), file_id: 1, file_name: "m.zip".into(), name: "Espada".into(), version: None, submitter: None, profile_url: "u".into(), license: None, md5: None };
+        crate::installer::install_zip(&zip, &custom, meta).unwrap();
+
+        let list = list_addons_in(&l, Some(&custom));
+        let by = |n: &str| list.iter().find(|a| a.name == n).unwrap();
+        assert!(by("Espada").has_models && !by("Som").has_models);
+        assert!(by("Espada").also_in_custom && !by("Som").also_in_custom);
+        assert!(list_addons(&l).iter().all(|a| !a.also_in_custom), "sem a pasta custom não há como saber");
         let _ = std::fs::remove_dir_all(&root);
     }
 

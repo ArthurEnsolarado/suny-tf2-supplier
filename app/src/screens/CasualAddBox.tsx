@@ -26,11 +26,13 @@ export function CasualAddBox({ kind, modId, file, ready, unknown, onGoCasual, on
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [added, setAdded] = useState<string[] | undefined>();
+  const [hasModels, setHasModels] = useState(false);
   const { job, track, dismiss } = useJob((j: CasualJob) => {
     onAdded();
     if (j.state === "done") {
-      const r = j.result as { added?: string[]; already_there?: boolean } | null;
+      const r = j.result as { added?: string[]; already_there?: boolean; has_models?: boolean } | null;
       setAdded(r?.added ?? []);
+      setHasModels(!!r?.has_models);
     }
   });
 
@@ -87,6 +89,14 @@ export function CasualAddBox({ kind, modId, file, ready, unknown, onGoCasual, on
             </Badge>{" "}
             {added.length === 0 ? t("add.alreadyThere") : t("add.marked", { names: added.join(", ") })}
           </p>
+          {hasModels && (
+            <p>
+              <Badge tone="warn" small>
+                {t("casual.tag.models")}
+              </Badge>{" "}
+              <T k="add.hasModels" />
+            </p>
+          )}
           <p className="muted">
             {t("add.gameUnchanged")}{" "}
             <button className="link" onClick={onGoCasual}>

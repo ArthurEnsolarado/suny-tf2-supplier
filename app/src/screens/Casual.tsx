@@ -195,7 +195,17 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
                     gbId={a.source?.gb_id ?? null}
                     title={a.source?.name ?? a.name}
                     subtitle={a.source?.submitter ? t("common.by", { who: a.source.submitter }) : a.source ? undefined : t("casual.list.external")}
-                    meta={`${t("files", { n: a.file_count })} · ${fmtBytes(a.size_bytes)}`}
+                    meta={
+                      <>
+                        {`${t("files", { n: a.file_count })} · ${fmtBytes(a.size_bytes)}`}
+                        {(a.has_models || a.also_in_custom) && (
+                          <span className="card-tags">
+                            {a.has_models && <span className="tag warn">{t("casual.tag.models")}</span>}
+                            {a.also_in_custom && <span className="tag warn">{t("casual.tag.alsoCustom")}</span>}
+                          </span>
+                        )}
+                      </>
+                    }
                     flag={stateOf(a.name)}
                     actions={
                       confirmRemove === a.name ? (
@@ -234,6 +244,16 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
                   />
                 ))}
               </ul>
+            )}
+            {addons.some((a) => a.has_models) && (
+              <p className="note">
+                <T k="casual.models.note" />
+              </p>
+            )}
+            {addons.some((a) => a.also_in_custom) && (
+              <p className="note">
+                <T k="casual.conflict.note" v={{ names: addons.filter((a) => a.also_in_custom).map((a) => a.source?.name ?? a.name).join(", ") }} />
+              </p>
             )}
             <p className="muted small">{t("casual.list.particlesNote")}</p>
           </section>

@@ -70,7 +70,7 @@ async fn main() {
 
     if mode == "apply" || mode == "both" {
         let (l2, tf2, n2) = (l.clone(), tf.clone(), names.clone());
-        casual::start_job("apply", "aplicar", move |rep| casual::apply(l2, tf2, n2, ApplyOptions::default(), rep)).expect("começar");
+        casual::start_job("apply", "aplicar", move |rep| casual::apply(l2, tf2, n2, ApplyOptions { quickprecache: std::env::var_os("SUNY_QP").is_some() }, rep)).expect("começar");
         let j = wait_job().await;
         println!("APPLY => {} em {}s | {:?} | erro: {:?}", j.state, j.elapsed_s, j.result, j.error);
         if j.state != "done" {

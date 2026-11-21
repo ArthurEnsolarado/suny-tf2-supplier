@@ -390,6 +390,11 @@ export const es: Record<Key, string> = {
   "settings.size.auto": "Automático (recomendado)",
   "settings.size.note": "En automático la app crece sola en pantallas grandes (2K, 4K, ultrapanorámicas) y se queda igual en las pequeñas. Elige un valor fijo si prefieres.",
   "settings.size.devOnly": "El tamaño de la interfaz solo cambia en la app instalada.",
+  "casual.tag.models": "Modelos",
+  "casual.tag.alsoCustom": "También en custom",
+  "casual.models.note": "<b>Los mods con modelos</b> (armas, cosméticos) pueden verse con el modelo normal en el casual de Valve: en Casual los modelos pasan por el paquete del preloader, que necesita precargar los modelos (QuickPrecache, apagado por defecto y aún sin probar). Instalar esos mods con <i>Instalar en custom</i> funcionó en las pruebas.",
+  "casual.conflict.note": "<b>{names}</b> está en la lista de Casual Y instalado en custom. La copia de Casual se lee primero y pisa la de custom: si el modelo desaparece en casual, quita el mod de la lista (o desinstala la copia de custom).",
+  "add.hasModels": "Este mod tiene modelos. En el casual de Valve puede verse con el modelo normal; <i>Instalar en custom</i> suele funcionar mejor para modelos.",
   "settings.about": "Acerca de",
   "settings.about.body": "Gestor de mods de Team Fortress 2 con el <b>Casual Preloader</b> de cueki (GPL-3.0) y el catálogo de <b>GameBanana</b>. Fuente TF2 Build. Proyecto GPL-3.0-or-later. No está afiliado a Valve.",
 };

@@ -518,3 +518,14 @@ a { color: var(--accent); }
 
 .install-hint { display: block; margin-top: 6px; max-width: 46ch; }
 .casual-add + p { margin-top: 12px; }
+
+/* categorias: o nome nunca passa por cima da contagem */
+.browse { grid-template-columns: 252px minmax(0, 1fr); }
+.cat { font-size: 15px; letter-spacing: 0.01em; }
+.cat > span:not(.count) { min-width: 0; overflow-wrap: anywhere; }
+.cat .count { flex: none; margin-left: auto; }
+
+.card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tag.warn { background: var(--tf-orange); color: var(--ink); }
+.note { margin: 12px 0 0; padding: 10px 14px; border-radius: 3px; background: var(--cream); color: var(--ink); }
+.note b { font-family: var(--display); font-weight: 400; color: var(--red); }

@@ -199,6 +199,12 @@ async fn fetch_as_zip(client: &Client, file: &crate::gamebanana::FileInfo, dest_
     res.map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// `SUNY_NO_GAME_ART=1`: roda sem ler banner, logo e ícones de classe do jogo (arte da Valve). Serve para tirar
+/// capturas de tela que podem ir para o repositório.
+fn no_game_art() -> bool {
+    std::env::var_os("SUNY_NO_GAME_ART").is_some_and(|v| v == "1")
+}
+
 fn strip_tags(s: &str) -> String {
     let mut out = String::new();
     let mut in_tag = false;
@@ -383,6 +389,7 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
 
         // Arte do jogo lida da instalação do Steam do usuário (nada é distribuído com o app).
         "art" => tokio::task::spawn_blocking(|| match steam::steam_dir() {
+            _ if no_game_art() => out(art::ArtSet::default()),
             Some(dir) => out(art::find_art(&dir, crate::TF2_APP_ID)),
             None => out(art::ArtSet::default()),
         })
@@ -532,6 +539,7 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
         "game_icons" => {
             let p: PathArgs = args(a)?;
             tokio::task::spawn_blocking(move || match resolve(&p.path) {
+                _ if no_game_art() => out(gameicons::GameIcons::default()),
                 Ok(install) => out(gameicons::load_class_icons(&install.tf_dir)),
                 Err(_) => out(gameicons::GameIcons::default()),
             })

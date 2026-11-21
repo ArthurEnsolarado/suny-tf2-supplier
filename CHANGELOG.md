@@ -3,6 +3,14 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.7.6
+
+### Added
+- **Warning for mods with models in the Casual list.** Found the hard way: when a model mod (like The Eyecrafter) is in the Casual list, the preloader packs its model inside `_casual_preloader_*.vpk`, which is read *before* `custom` and overrides the copy in `custom`. In Valve's casual the model then needs pre-loading (QuickPrecache, off by default and untested) or you see the normal model again. The app now tags those mods with **Models**, tags mods installed in both places with **Also in custom**, and explains it right on the Casual page and when you add one.
+
+### Fixed
+- Category names no longer overlap their counters in the catalog sidebar.
+
 ## 0.7.5
 
 ### Fixed

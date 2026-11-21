@@ -196,6 +196,8 @@ export interface CasualAddon {
   size_bytes: number;
   enabled: boolean;
   source: CasualSource | null;
+  has_models: boolean;
+  also_in_custom: boolean;
 }
 
 export interface CasualJob {
