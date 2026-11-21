@@ -3,6 +3,12 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.9.1
+
+### Fixed
+- The window layout is now pinned to the window and the page itself can no longer scroll: only the inner areas (the content and the side menu) scroll. This guards against the app drawing short of the window height with the top of the menu scrolled out of view, as reported on a maximized window.
+- Notes and warnings use a thin full border instead of a thick stripe on one side.
+
 ## 0.9.0
 
 ### Changed

@@ -32,6 +32,8 @@
 
 * { box-sizing: border-box; scrollbar-color: var(--surface-3) transparent; scrollbar-width: thin; }
 html, body, #root { height: 100%; }
+/* o app é uma janela, não uma página: ocupa sempre a janela inteira e só as áreas internas rolam */
+html, body { overflow: hidden; overscroll-behavior: none; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 400 14px/1.5 var(--body); font-synthesis: none; -webkit-font-smoothing: antialiased; }
 h1, h2, h3, h4 { margin: 0; font-weight: 600; color: var(--text); }
 h1 { font-size: 24px; line-height: 1.2; letter-spacing: -0.01em; }
@@ -48,7 +50,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .small { font-size: 12.5px; }
 
 /* ===== moldura: menu lateral + conteúdo ===== */
-.app { height: 100%; display: grid; grid-template-columns: 232px minmax(0, 1fr); min-width: 0; }
+.app { position: fixed; inset: 0; display: grid; grid-template-columns: 232px minmax(0, 1fr); min-width: 0; }
 .sidebar { background: var(--side); border-right: 1px solid var(--line-soft); display: flex; flex-direction: column; padding: 16px 12px 14px; gap: 4px; min-height: 0; overflow-y: auto; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px; font-family: var(--brand); font-size: 19px; line-height: 1.05; color: var(--text); white-space: nowrap; }
 .brand img { display: block; flex: none; }
