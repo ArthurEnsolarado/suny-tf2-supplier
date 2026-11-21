@@ -52,7 +52,7 @@ jobs:
           $m = [regex]::Match($text, "(?ms)^## $([regex]::Escape($ver))\s*\r?\n(.*?)(?=^## |\z)")
           if (-not $m.Success) { throw "no '## $ver' section in CHANGELOG.md" }
           $m.Groups[1].Value.Trim() | Out-File -Encoding utf8 out/notes.md
-      - name: Publish (as a DRAFT: nothing is public until you press Publish on GitHub)
+      - name: Publish as a draft (nothing is public until you press Publish on GitHub)
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
