@@ -3,6 +3,11 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.7.9
+
+### Changed
+- Installing over an older version no longer pushes you to uninstall first. The "already installed" page now offers **Update in place, without uninstalling (recommended)** and, as the other choice, **Uninstall and install from scratch**. Texts in Portuguese, English and Spanish.
+
 ## 0.7.8
 
 ### Changed
