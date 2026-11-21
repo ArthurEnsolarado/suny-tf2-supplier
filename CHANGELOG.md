@@ -26,6 +26,14 @@ First public release. A lot of stuff, so here we go.
 - Play button now greys out while TF2 is open, and the game state refreshes by itself every few seconds.
 - Class icons look the same everywhere now (before, some had a dark background and some looked like outlines).
 
+### Important commits
+- `8238e6d` license, credits, gitignore (what stays out of the repo)
+- `5a7cd7a` core crate: Steam detection, GameBanana client, installer, analysis, Casual Preloader integration, updater
+- `310e3cb` the bridge to the Casual Preloader
+- `c1b0b08` the app: Tauri shell, React UI in en / es / pt, installer config, icons
+- `4474b79` docs, changelog, CI and release workflows
+- `166a0cc` readme
+
 ### Known stuff
 - Mods with particles (`.pcf`) aren't supported in the Casual tab yet.
 - Only Casual Preloader 2.3.1 is tested.

@@ -1,7 +1,8 @@
 name: Release
 
-# Push a tag like v0.8.0 to publish a release. Tags with a dash (v0.8.0-beta.1) become pre-releases,
-# and the in-app updater ignores pre-releases (it only offers stable versions).
+# Push a tag like v0.8.0 to build a release. It is created as a DRAFT: only people with access to the repo see it,
+# and the in-app updater ignores drafts. Press "Publish release" on GitHub when it should go out.
+# Tags with a dash (v0.8.0-beta.1) become pre-releases, which the updater also ignores (it only offers stable versions).
 on:
   push:
     tags: ["v*"]
@@ -51,11 +52,11 @@ jobs:
           $m = [regex]::Match($text, "(?ms)^## $([regex]::Escape($ver))\s*\r?\n(.*?)(?=^## |\z)")
           if (-not $m.Success) { throw "no '## $ver' section in CHANGELOG.md" }
           $m.Groups[1].Value.Trim() | Out-File -Encoding utf8 out/notes.md
-      - name: Publish
+      - name: Publish (as a DRAFT: nothing is public until you press Publish on GitHub)
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $pre = @()
           if ("${{ github.ref_name }}" -match '-') { $pre = @('--prerelease') }
-          gh release create "${{ github.ref_name }}" --title "${{ github.ref_name }}" --notes-file out/notes.md @pre (Get-ChildItem out -Filter '*-setup.exe').FullName out/SHA256SUMS.txt
+          gh release create "${{ github.ref_name }}" --title "${{ github.ref_name }}" --draft --notes-file out/notes.md @pre (Get-ChildItem out -Filter '*-setup.exe').FullName out/SHA256SUMS.txt
