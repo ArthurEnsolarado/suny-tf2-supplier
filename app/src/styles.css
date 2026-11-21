@@ -100,7 +100,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .box svg { width: 13px; height: 13px; }
 
 /* aviso: faixa com filete lateral discreto, sem inclinar nada */
-.note { background: var(--surface-2); border-left: 3px solid var(--accent); border-radius: 0 var(--radius) var(--radius) 0; color: var(--text); padding: 12px 16px; margin: 14px 0 0; max-width: 78ch; }
+.note { background: color-mix(in oklch, var(--accent) 8%, var(--surface-2)); border: 1px solid color-mix(in oklch, var(--accent) 28%, transparent); border-radius: var(--radius); color: var(--text); padding: 12px 16px; margin: 14px 0 0; max-width: 78ch; }
 .note b { color: var(--accent); }
 
 /* ===== selo de estado ===== */
