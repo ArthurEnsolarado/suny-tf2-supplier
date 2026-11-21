@@ -3,6 +3,11 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.8.1
+
+### Fixed
+- **Add to Casual** failed with "couldn't recognize the mod structure ... or the zip has more than one mod" on packs that carry several variants (for example *Scottish Shield + Captain America*: two models, two flags). Each variant now becomes its own item in the Casual list, named after its folder in the archive, and they come **unchecked**: they replace the same files, so you tick the one you want. Packs with more than 12 variants are still refused, with a message saying so.
+
 ## 0.8.0
 
 ### Added

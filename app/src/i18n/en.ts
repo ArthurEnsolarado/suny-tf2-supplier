@@ -406,6 +406,7 @@ export const en: Record<Key, string> = {
   "casual.tag.alsoCustom": "Also in custom",
   "casual.models.note": "<b>Mods with models</b> (weapons, cosmetics) can show the normal model in Valve's casual: in Casual the models go through the preloader's package, which needs to pre-load the models (QuickPrecache, off by default and still untested). Installing those mods with <i>Install to custom</i> worked in testing.",
   "casual.conflict.note": "<b>{names}</b> is in the Casual list AND installed in custom. The Casual copy is read first and overrides the custom one: if the model disappears in casual, take the mod out of the list (or uninstall the custom copy).",
+  "add.variants": "This pack has {n} variants (for example different flags or models). Each one went into the Casual list, unchecked: tick only the one you want, because they replace the same files.",
   "add.hasModels": "This mod has models. In Valve's casual it can show the normal model; <i>Install to custom</i> usually works better for models.",
   "settings.about": "About",
   "settings.about.body": "Team Fortress 2 mod manager built on cueki's <b>Casual Preloader</b> (GPL-3.0) and the <b>GameBanana</b> catalog. TF2 Build font. GPL-3.0-or-later project. Not affiliated with Valve.",

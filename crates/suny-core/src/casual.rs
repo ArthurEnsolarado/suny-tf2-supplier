@@ -896,16 +896,20 @@ pub async fn add_zip(l: Layout, zip_path: PathBuf, addon_name: String, source: A
             let meta = serde_json::to_vec_pretty(&source).map_err(|e| e.to_string())?;
             write_atomic(&l.meta_dir().join(format!("{name}.json")), &meta)?;
         }
-        // Mods novos já entram marcados para a próxima aplicação.
-        update_state(&l, |s| {
-            for n in &changed {
-                if !s.enabled.contains(n) {
-                    s.enabled.push(n.clone());
+        // Um mod novo já entra marcado para a próxima aplicação. Um pacote com VÁRIAS variantes entra desmarcado:
+        // elas trocam os mesmos arquivos, então marcar todas seria uma disputa. Quem escolhe é o usuário.
+        let variants = changed.len() > 1;
+        if !variants {
+            update_state(&l, |s| {
+                for n in &changed {
+                    if !s.enabled.contains(n) {
+                        s.enabled.push(n.clone());
+                    }
                 }
-            }
-        })?;
+            })?;
+        }
         let has_models = changed.iter().any(|n| dir_has_models(&l.addons_dir().join(n)));
-        Ok(json!({ "added": changed, "message": res["message"], "already_there": changed.is_empty(), "has_models": has_models }))
+        Ok(json!({ "added": changed, "message": res["message"], "already_there": changed.is_empty(), "has_models": has_models, "variants": variants }))
     })
     .await
     .map_err(|e| e.to_string())?

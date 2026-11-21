@@ -407,6 +407,7 @@ export const pt = {
   "casual.tag.alsoCustom": "Também em custom",
   "casual.models.note": "<b>Mods com modelos</b> (armas, cosméticos) podem aparecer com o modelo normal no casual da Valve: no Casual os modelos passam pelo pacote do preloader, que precisa pré-carregar os modelos (QuickPrecache, desligado por padrão e ainda não testado). Instalar esses mods com <i>Instalar em custom</i> funcionou nos testes.",
   "casual.conflict.note": "<b>{names}</b> está na lista do Casual E instalado em custom. A cópia do Casual é lida primeiro e passa por cima da de custom: se o modelo sumir no casual, tire o mod da lista (ou desinstale a cópia de custom).",
+  "add.variants": "Este pacote tem {n} variantes (por exemplo, bandeiras ou modelos diferentes). Cada uma entrou na lista do Casual, desmarcada: marque só a que você quer, porque elas trocam os mesmos arquivos.",
   "add.hasModels": "Este mod tem modelos. No casual da Valve ele pode aparecer com o modelo normal; <i>Instalar em custom</i> costuma funcionar melhor para modelos.",
   "settings.about": "Sobre",
   "settings.about.body": "Gerenciador de mods de Team Fortress 2 com o <b>Casual Preloader</b> de cueki (GPL-3.0) e o catálogo do <b>GameBanana</b>. Fonte TF2 Build. Projeto GPL-3.0-or-later. Não é afiliado à Valve.",

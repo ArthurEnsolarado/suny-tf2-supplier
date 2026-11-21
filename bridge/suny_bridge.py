@@ -65,18 +65,36 @@ def _options(raw: dict) -> dict:
     }
 
 
-def _find_mod_root(importer, root: Path):
-    """Acha a pasta que o preloader reconhece como mod (a mais rasa, até 5 níveis). Zips costumam vir
-    embalados: `Nome/tf/sound/...`, `Nome/README.txt` + `Nome/tf/...`. Dois mods no mesmo nível = ambíguo (None)."""
+MAX_VARIANTS = 12
+
+
+def _find_mod_roots(importer, root: Path):
+    """Acha as pastas que o preloader reconhece como mod no nível mais raso que tiver alguma (até 5 níveis).
+    Zips costumam vir embalados: `Nome/tf/sound/...`, `Nome/README.txt` + `Nome/tf/...`.
+    Mais de uma no mesmo nível = pacote com variantes (ex.: duas bandeiras, dois modelos)."""
     level = [root]
     for _ in range(5):
         valid = [d for d in level if importer.validator.validate_folder(d).is_valid]
-        if len(valid) == 1:
-            return valid[0]
-        if len(valid) > 1:
-            return None
+        if valid:
+            return valid
         level = [child for d in level for child in sorted(d.iterdir()) if child.is_dir()]
-    return None
+    return []
+
+
+def _find_mod_root(importer, root: Path):
+    """Compatível com o uso antigo: a pasta do mod, ou None se não há nenhuma ou se há mais de uma."""
+    roots = _find_mod_roots(importer, root)
+    return roots[0] if len(roots) == 1 else None
+
+
+def _variant_label(root: Path, folder: Path) -> str:
+    """Nome curto de uma variante: o caminho dela dentro do zip, sem caracteres ruins para pasta."""
+    import re
+
+    parts = [p for p in folder.relative_to(root).parts if p.lower() not in ("tf", "custom")]
+    label = " - ".join(parts) or folder.name
+    label = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", label).strip(" .")
+    return label[:60] or "variante"
 
 
 def _import_vpks(importer, root: Path, name: str, progress):
@@ -159,9 +177,31 @@ def handle(msg: dict) -> None:
             # `tf/sound/...` viraria sempre "tf", e dois mods diferentes se sobrescreveriam.
             with tempfile.TemporaryDirectory() as tmp:
                 extract(Path(msg["zip"]), Path(tmp))
-                folder = _find_mod_root(importer, Path(tmp))
-                if folder is not None:
-                    ok, message = importer.process_folder(folder, override_name=name, progress_callback=progress)
+                roots = _find_mod_roots(importer, Path(tmp))
+                if len(roots) > MAX_VARIANTS:
+                    ok, message = False, (
+                        f"este pacote tem {len(roots)} mods diferentes (o limite é {MAX_VARIANTS}). "
+                        "Baixe e separe o que você quer antes de adicionar."
+                    )
+                elif len(roots) > 1:
+                    # Pacote com variantes: cada uma vira um item próprio. Quem escolhe qual usar é o usuário.
+                    seen = set()
+                    made = []
+                    for i, folder in enumerate(roots):
+                        label = _variant_label(Path(tmp), folder)
+                        if label.lower() in seen:
+                            label = f"{label} ({i + 1})"
+                        seen.add(label.lower())
+                        n = len(roots)
+                        step = lambda pct, text, i=i, n=n: progress(int((i + pct / 100) * 100 / n), text)
+                        ok, message = importer.process_folder(folder, override_name=f"{name} - {label}", progress_callback=step)
+                        if not ok:
+                            break
+                        made.append(label)
+                    if ok:
+                        message = f"{len(made)} variantes: " + ", ".join(made)
+                elif roots:
+                    ok, message = importer.process_folder(roots[0], override_name=name, progress_callback=progress)
                 else:
                     # Mods empacotados num .vpk (muito comum no GameBanana): o preloader sabe extrair o .vpk.
                     result = _import_vpks(importer, Path(tmp), name, progress)
