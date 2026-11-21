@@ -450,7 +450,7 @@ a { color: var(--accent); }
 /* abas com ícone */
 .tab { display: inline-flex; align-items: center; gap: 8px; }
 .tab svg { width: 18px; height: 18px; flex: none; }
-@media (max-width: 1280px) { .tab svg { display: none; } }
+@media (max-width: 1640px) { .tab svg { display: none; } }
 
 /* ícone das categorias (as que não são classe do jogo) */
 .cat-glyph { width: 22px; height: 22px; flex: none; color: var(--muted); }
@@ -505,3 +505,16 @@ a { color: var(--accent); }
 .detect-detail li { margin: 3px 0; overflow-wrap: anywhere; }
 .detect-detail .hit { color: var(--green); }
 .detect summary, .job summary { cursor: pointer; color: var(--cream); font-weight: 700; }
+
+/* ===== v0.7.4: adaptação a resoluções ===== */
+/* o conteúdo tem largura máxima e fica centralizado (ultrawide não estica mais); a barra do topo acompanha */
+:root { --content-max: 1640px; --gutter: max(24px, calc((100vw - var(--content-max)) / 2)); }
+.topbar, .footbar { padding-left: var(--gutter); padding-right: var(--gutter); }
+.sheet { padding-left: max(36px, var(--gutter)); padding-right: max(36px, var(--gutter)); }
+.app { min-width: 0; }
+/* grade do catálogo: o número de colunas acompanha a largura (cards de tamanho parecido em qualquer tela) */
+.grid { grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); }
+@media (max-width: 1100px) { .grid { grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); } }
+
+.install-hint { display: block; margin-top: 6px; max-width: 46ch; }
+.casual-add + p { margin-top: 12px; }

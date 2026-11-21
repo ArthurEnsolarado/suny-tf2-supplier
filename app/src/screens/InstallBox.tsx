@@ -61,10 +61,10 @@ export function InstallBox({ installRoot, kind, modId, file, gameRunning, onChan
   if (phase.t === "idle") {
     return (
       <p>
-        <button className="btn primary" onClick={() => setPhase({ t: "confirm" })} disabled={gameRunning} title={gameRunning ? t("install.closeGame") : undefined}>
+        <button className="btn" onClick={() => setPhase({ t: "confirm" })} disabled={gameRunning} title={gameRunning ? t("install.closeGame") : undefined}>
           {t("install.button")}
         </button>
-        {gameRunning && <span className="muted small"> {t("install.closeGame")}</span>}
+        <span className="muted small install-hint">{gameRunning ? t("install.closeGame") : t("install.hint")}</span>
       </p>
     );
   }

@@ -68,7 +68,7 @@ export function CasualAddBox({ kind, modId, file, ready, unknown, onGoCasual, on
   const running = job?.state === "running";
   return (
     <div className="casual-add">
-      <button className="btn" onClick={run} disabled={starting || running}>
+      <button className="btn primary" onClick={run} disabled={starting || running}>
         {starting ? t("add.downloading") : t("add.button")}
       </button>
       {error && (

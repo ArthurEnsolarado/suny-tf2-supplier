@@ -44,6 +44,34 @@ pub struct Analysis {
     pub audio_total: usize,
     /// O índice dos arquivos originais do jogo estava disponível?
     pub vanilla_known: bool,
+    /// Arquivos que moram DENTRO de `.vpk` do pacote (o app lê o índice do VPK; não dá para ouvir os sons de lá).
+    pub vpk_files: usize,
+}
+
+/// Maior `.vpk` que o app abre para ler o índice durante a análise.
+const MAX_VPK_INSPECT: u64 = 400 << 20;
+
+/// Caminhos (minúsculos, com `/`) dos arquivos que estão dentro dos `.vpk` do zip. Quem não abre é ignorado.
+/// Partes de dados (`nome_000.vpk`) não têm índice e são puladas.
+fn vpk_inner_paths(zip: &mut zip::ZipArchive<File>) -> Vec<String> {
+    let mut out = Vec::new();
+    for i in 0..zip.len() {
+        let Ok(mut e) = zip.by_index(i) else { continue };
+        let name = e.name().unwrap_or_default().to_ascii_lowercase();
+        let is_data_part = name.len() > 8 && name.ends_with(".vpk") && name[..name.len() - 4].rsplit_once('_').is_some_and(|(_, n)| n.len() == 3 && n.bytes().all(|b| b.is_ascii_digit()));
+        if !name.ends_with(".vpk") || is_data_part || e.size() > MAX_VPK_INSPECT {
+            continue;
+        }
+        let tmp = std::env::temp_dir().join(format!("suny-vpk-{}-{i}.vpk", std::process::id()));
+        let ok = File::create(&tmp).and_then(|mut f| std::io::copy(&mut e, &mut f)).is_ok();
+        if ok {
+            if let Ok(list) = crate::gameicons::list_paths(&tmp, |_| true) {
+                out.extend(list.into_iter().take(50_000));
+            }
+        }
+        let _ = std::fs::remove_file(&tmp);
+    }
+    out
 }
 
 fn ext_of(name: &str) -> String {
@@ -62,7 +90,11 @@ pub fn analyze_zip(zip_path: &Path, vanilla: Option<&VanillaIndex>) -> Result<An
         sizes.push(e.size());
     }
 
-    let report = scanner::analyze(&names, vanilla);
+    // Mods empacotados num .vpk: o conteúdo de dentro entra na análise como se estivesse solto no zip.
+    let inner = vpk_inner_paths(&mut zip);
+    let mut scan_names = names.clone();
+    scan_names.extend(inner.iter().cloned());
+    let report = scanner::analyze(&scan_names, vanilla);
     let known = vanilla.is_some_and(|v| !v.is_empty());
 
     let mut rels: Vec<String> = Vec::new();
@@ -98,9 +130,16 @@ pub fn analyze_zip(zip_path: &Path, vanilla: Option<&VanillaIndex>) -> Result<An
         rels.push(rel);
     }
 
+    let vpk_files = inner.len();
+    for path in &inner {
+        let rel = scanner::game_relative(path);
+        if scanner::is_game_path(&rel) {
+            rels.push(rel);
+        }
+    }
     let groups = replaces::group(&rels, vanilla);
     let classes = replaces::classes_affected(&groups);
-    Ok(Analysis { file_count, game_files: rels.len(), report, groups, classes, audio, audio_total, vanilla_known: known })
+    Ok(Analysis { file_count, game_files: rels.len(), report, groups, classes, audio, audio_total, vanilla_known: known, vpk_files })
 }
 
 /// Lê um áudio de dentro do zip para a prévia. Só `.wav`, `.mp3` e `.ogg`, até `MAX_PREVIEW_BYTES`.
@@ -234,5 +273,21 @@ mod tests {
         assert!(matches!(analyze_zip(&p, None), Err(Error::Archive(_))));
         assert!(read_audio(&p, "a.wav").is_err());
         assert!(analyze_zip(&d.join("nao_existe.zip"), None).is_err());
+    }
+
+    #[test]
+    fn a_zip_with_only_a_vpk_is_analysed_by_what_is_inside_the_vpk() {
+        let dir = std::env::temp_dir().join(format!("suny_ana_vpk_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let vpk = crate::gameicons::tests::make_vpk(&dir, &[("models/weapons/c_models/c_claymore", "c_claymore", b"x"), ("materials/models/weapons/c_items", "c_claymore", b"y")], true);
+        let vpk_bytes = std::fs::read(&vpk).unwrap();
+        let p = make_zip("vpkonly", &[("Eyecrafter/Eyecrafter.vpk", &vpk_bytes), ("Eyecrafter/readme.txt", b"oi")]);
+        let a = analyze_zip(&p, None).unwrap();
+        assert_eq!(a.vpk_files, 2, "os dois arquivos de dentro do vpk");
+        assert_eq!(a.game_files, 2);
+        assert!(a.groups.iter().any(|g| g.label.contains("armas") || g.label.contains("Armas")), "{:?}", a.groups.iter().map(|g| &g.label).collect::<Vec<_>>());
+        assert!(a.audio.is_empty(), "som de dentro de um vpk não dá para tocar");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

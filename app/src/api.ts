@@ -4,7 +4,7 @@
 
 const DEV_SERVER = "http://127.0.0.1:1421/api";
 
-const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export class ApiError extends Error {}
 

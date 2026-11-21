@@ -194,6 +194,8 @@ const RULES: Rule[] = [
   ),
   rule("Conferindo o arquivo…", "Checking the file…", "Comprobando el archivo…"),
   rule("Importando no preloader…", "Importing into the preloader…", "Importando en el preloader…"),
+  rule("este mod tem partículas (.pcf) dentro do .vpk. O app ainda não escolhe partículas para o casual: use por enquanto a janela do Casual Preloader", "this mod has particles (.pcf) inside the .vpk. The app can't pick particles for Casual yet: use the Casual Preloader window for now", "este mod tiene partículas (.pcf) dentro del .vpk. La app aún no elige partículas para Casual: por ahora usa la ventana del Casual Preloader"),
+  rule("Não reconheci a estrutura do mod (esperava pastas como sound, models, materials... ou um .vpk) ou o zip tem mais de um mod.", "Couldn't recognize the mod structure (expected folders like sound, models, materials... or a .vpk) or the zip has more than one mod.", "No reconocí la estructura del mod (se esperaban carpetas como sound, models, materials... o un .vpk) o el zip tiene más de un mod."),
   rule("Estrutura de mod não reconhecida (esperava pastas como sound, models, materials...)", "Mod structure not recognized (expected folders like sound, models, materials...)", "Estructura de mod no reconocida (se esperaban carpetas como sound, models, materials...)"),
   rule(
     "Não reconheci a estrutura do mod (esperava pastas como sound, models, materials...) ou o zip tem mais de um mod.",

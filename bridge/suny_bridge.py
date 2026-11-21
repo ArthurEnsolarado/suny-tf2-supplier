@@ -79,6 +79,43 @@ def _find_mod_root(importer, root: Path):
     return None
 
 
+def _import_vpks(importer, root: Path, name: str, progress):
+    """Importa os `.vpk` achados em `root` como mods do casual, com o nome escolhido pelo app.
+    Devolve None se não há `.vpk`. Um `.vpk` com partículas (.pcf) é recusado (o app ainda não escolhe partículas)."""
+    import re
+    import shutil
+
+    from core.config import config
+    from valve_parsers import VPKFile
+
+    vpks = sorted(root.rglob("*.vpk"))
+    mains = [p for p in vpks if p.stem.lower().endswith("_dir")] or [p for p in vpks if not re.search(r"_\d{3}$", p.stem)]
+    if not mains:
+        return None
+    for vpk in mains:
+        if VPKFile(vpk).find_files("*.pcf"):
+            return False, (
+                "este mod tem partículas (.pcf) dentro do .vpk. O app ainda não escolhe partículas para o casual: "
+                "use por enquanto a janela do Casual Preloader"
+            )
+    names = []
+    for vpk in mains:
+        ok, message = importer.process_vpk_file(vpk, progress_callback=progress)
+        if not ok:
+            return ok, message
+        stem = vpk.stem
+        if (stem[-3:].isdigit() and len(stem) > 3 and stem[-4] == "_") or stem[-4:] == "_dir":
+            stem = stem[:-4]
+        src = config.addons_dir / stem
+        target = config.addons_dir / (name if len(mains) == 1 else f"{name} ({stem})")
+        if src != target and src.exists():
+            if target.exists():
+                shutil.rmtree(target)
+            shutil.move(str(src), str(target))
+        names.append(target.name)
+    return True, f"Successfully processed {len(names)} VPK file(s)"
+
+
 def handle(msg: dict) -> None:
     cmd = msg.get("cmd")
 
@@ -123,13 +160,16 @@ def handle(msg: dict) -> None:
             with tempfile.TemporaryDirectory() as tmp:
                 extract(Path(msg["zip"]), Path(tmp))
                 folder = _find_mod_root(importer, Path(tmp))
-                if folder is None:
-                    ok, message = False, (
-                        "Não reconheci a estrutura do mod (esperava pastas como sound, models, materials...) "
-                        "ou o zip tem mais de um mod."
-                    )
-                else:
+                if folder is not None:
                     ok, message = importer.process_folder(folder, override_name=name, progress_callback=progress)
+                else:
+                    # Mods empacotados num .vpk (muito comum no GameBanana): o preloader sabe extrair o .vpk.
+                    result = _import_vpks(importer, Path(tmp), name, progress)
+                    ok, message = result if result is not None else (
+                        False,
+                        "Não reconheci a estrutura do mod (esperava pastas como sound, models, materials... ou um .vpk) "
+                        "ou o zip tem mais de um mod.",
+                    )
         emit(event="imported", ok=bool(ok), message=str(message))
     elif cmd == "install":
         service.install(

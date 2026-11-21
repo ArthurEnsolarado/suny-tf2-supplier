@@ -9,6 +9,7 @@ import { Installed } from "./screens/Installed";
 import { Settings } from "./screens/Settings";
 import { UpdateDialog } from "./screens/UpdateDialog";
 import { useUpdate } from "./update";
+import { useUiZoom } from "./useUiZoom";
 import type { ArtSet, CasualStatus, Detect, GameIcons, Inspect } from "./types";
 import { Icon, useAsync, type IconName } from "./ui";
 
@@ -26,6 +27,7 @@ const STORE_KEY = "suny.installPath";
 const QP_KEY = "suny.quickprecache";
 const AUTO_UPDATE_KEY = "suny.autoUpdate";
 const SKIP_UPDATE_KEY = "suny.skipUpdate";
+const ZOOM_KEY = "suny.zoom";
 
 function readStored(key: string): string | undefined {
   try {
@@ -77,6 +79,10 @@ export function App() {
   const [path, setPath] = useState<string | undefined>(() => readStored(STORE_KEY));
   const [pathError, setPathError] = useState<string | undefined>();
   const [quickprecache, setQuickprecache] = useState(() => readStored(QP_KEY) === "1");
+
+  // Tamanho da interface: automático pela janela, ou fixo escolhido nas Configurações.
+  const [zoomMode, setZoomMode] = useState(() => readStored(ZOOM_KEY) ?? "auto");
+  useUiZoom(zoomMode);
 
   // Atualizações do app: confere ao abrir (dá para desligar nas Configurações).
   const [autoUpdate, setAutoUpdate] = useState(() => readStored(AUTO_UPDATE_KEY) !== "0");
@@ -289,6 +295,11 @@ export function App() {
             onQuickprecache={(v) => {
               setQuickprecache(v);
               writeStored(QP_KEY, v ? "1" : "0");
+            }}
+            zoomMode={zoomMode}
+            onZoomMode={(m) => {
+              setZoomMode(m);
+              writeStored(ZOOM_KEY, m);
             }}
             update={update}
             autoUpdate={autoUpdate}

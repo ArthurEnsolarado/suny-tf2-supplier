@@ -3,6 +3,17 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.7.4
+
+### Fixed
+- **Mods packed in a `.vpk` now work in the Casual tab.** Many GameBanana mods (like The Eyecrafter) ship a single `.vpk`; "Add to Casual" used to answer "couldn't recognize the mod structure". The app now hands the `.vpk` to the preloader's own VPK importer. VPKs with particles are refused with a clear message.
+- The analysis now reads **inside** `.vpk` files, so "What changes" lists the real models and textures (before it said "no game files in this package").
+- The window no longer overflows around 1500 px wide (the tab icons pushed the top bar out of the window).
+
+### Changed
+- **Add to Casual** is the main (orange) button on a mod's page; **Install to custom** is secondary and now says right there that it only works offline and on community servers, not in Valve's casual.
+- **The interface adapts to any screen.** Content has a maximum width and stays centered (ultrawide screens no longer stretch everything), the catalog grid picks its number of columns from the width, and on big screens (2K, 4K, ultrawide) the app scales itself up. Settings → Interface size lets you pick a fixed size instead. Checked from 920 x 600 up to 2560 x 720.
+
 ## 0.7.3
 
 ### Added

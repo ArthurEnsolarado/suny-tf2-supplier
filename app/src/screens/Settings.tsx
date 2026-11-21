@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { call } from "../api";
+import { inTauri } from "../api";
 import { fmtBytes } from "../format";
 import { LANGS, useI18n } from "../i18n";
 import type { AppInfo, Detect, Inspect, UpdateInfo } from "../types";
 import { Badge, ErrorState, useAsync } from "../ui";
+import { ZOOM_MODES } from "../useUiZoom";
 import { DetectPanel } from "./DetectPanel";
 import { PathForm, PathText } from "./PathForm";
 
@@ -16,13 +18,15 @@ interface Props {
   onDetect: () => void;
   quickprecache: boolean;
   onQuickprecache: (v: boolean) => void;
+  zoomMode: string;
+  onZoomMode: (m: string) => void;
   update: { info: UpdateInfo | null; checking: boolean; error: string | undefined; check: () => void };
   autoUpdate: boolean;
   onAutoUpdate: (v: boolean) => void;
   onOpenUpdate: () => void;
 }
 
-export function Settings({ inspect, pathError, onUsePath, detect, detecting, onDetect, quickprecache, onQuickprecache, update, autoUpdate, onAutoUpdate, onOpenUpdate }: Props) {
+export function Settings({ inspect, pathError, onUsePath, detect, detecting, onDetect, quickprecache, onQuickprecache, zoomMode, onZoomMode, update, autoUpdate, onAutoUpdate, onOpenUpdate }: Props) {
   const { t, T, tc, lang, setLang } = useI18n();
   const info = useAsync<AppInfo>(() => call<AppInfo>("app_info"), []);
   const [cleared, setCleared] = useState<string | undefined>();
@@ -67,6 +71,21 @@ export function Settings({ inspect, pathError, onUsePath, detect, detecting, onD
               ))}
             </div>
             <p className="muted small">{t("settings.language.note")}</p>
+          </section>
+
+          <section aria-labelledby="h-size">
+            <h2 id="h-size">{t("settings.size")}</h2>
+            <label className="field">
+              <span>{t("settings.size.label")}</span>
+              <select className="blank" value={zoomMode} onChange={(e) => onZoomMode(e.target.value)} disabled={!inTauri}>
+                {ZOOM_MODES.map((m) => (
+                  <option key={m} value={m}>
+                    {m === "auto" ? t("settings.size.auto") : `${Math.round(Number(m) * 100)}%`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="muted small">{inTauri ? t("settings.size.note") : t("settings.size.devOnly")}</p>
           </section>
 
           <section aria-labelledby="h-tf2">
