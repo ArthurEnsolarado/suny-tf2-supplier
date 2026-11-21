@@ -1,0 +1,61 @@
+name: Release
+
+# Push a tag like v0.8.0 to publish a release. Tags with a dash (v0.8.0-beta.1) become pre-releases,
+# and the in-app updater ignores pre-releases (it only offers stable versions).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Check the tag matches the app version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart('v') -replace '-.*$',''
+          $conf = (Get-Content app/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ($tag -ne $conf) { throw "tag $tag does not match tauri.conf.json version $conf" }
+      - name: Test
+        run: |
+          npm --prefix app ci
+          cargo test -p suny-core
+      - name: Build the installer
+        working-directory: app
+        run: npx tauri build --bundles nsis
+      - name: Collect installer and checksums
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          New-Item -ItemType Directory -Force out | Out-Null
+          $src = Get-ChildItem -Recurse -Filter '*-setup.exe' -Path "$env:CARGO_TARGET_DIR","target" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $src) { throw "installer not found" }
+          $dst = "out/Suny-TF2-Supplier_${ver}_x64-setup.exe"
+          Copy-Item $src.FullName $dst
+          $hash = (Get-FileHash $dst -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $dst -Leaf)" | Out-File -Encoding ascii out/SHA256SUMS.txt
+      - name: Release notes from CHANGELOG.md
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v') -replace '-.*$',''
+          $text = Get-Content CHANGELOG.md -Raw
+          $m = [regex]::Match($text, "(?ms)^## $([regex]::Escape($ver))\s*\r?\n(.*?)(?=^## |\z)")
+          if (-not $m.Success) { throw "no '## $ver' section in CHANGELOG.md" }
+          $m.Groups[1].Value.Trim() | Out-File -Encoding utf8 out/notes.md
+      - name: Publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $pre = @()
+          if ("${{ github.ref_name }}" -match '-') { $pre = @('--prerelease') }
+          gh release create "${{ github.ref_name }}" --title "${{ github.ref_name }}" --notes-file out/notes.md @pre (Get-ChildItem out -Filter '*-setup.exe').FullName out/SHA256SUMS.txt
