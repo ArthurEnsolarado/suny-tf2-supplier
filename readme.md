@@ -32,10 +32,12 @@ okay but for real, here's the stuff people actually ask:
 
 ## what it does
 
-- **catalog**: mods and sounds straight from GameBanana, 5 columns, infinite scroll, categories, and a big page for each mod with all the screenshots, description, numbers and files.
-- **install**: `.zip`, `.rar` and `.7z`. goes into `tf/custom`, in a folder the app owns, and it never touches stuff it didn't put there. only with TF2 closed.
+- **catalog**: mods and sounds straight from GameBanana, with a row of class faces on top, categories, search by name, and a page for each mod with the screenshots, description, numbers and files.
+- **install**: `.zip`, `.rar` and `.7z`. goes into `tf/custom`, in a folder the app owns, and it never touches stuff it didn't put there. new mods can go in with TF2 open (there's a restart button to load them); removing or changing one needs the game closed. maps never go to casual.
+- **one install panel**: it asks where you'll play, casual (Valve servers) or offline/community, and says what changes between them.
 - **analyze before installing**: shows what a mod changes (hitsound? demoman voice? weapons?), with the class icon, and you can **listen to the sounds** before you install anything.
 - **casual**: uses [cueki's Casual Preloader](https://gamebanana.com/tools/19049) so mods work in Valve's casual. add mods to a list, hit apply, hit revert if you hate it. the preloader is downloaded from the official release (size + SHA-256 checked), it's not copied into this repo.
+- **installed**: what the app put there, and what you put by hand. packs with many files show up as one card that opens a list of everything inside.
 - **play button**: opens TF2 through Steam. greyed out while the game is open.
 - **english, español, português**: change it in Settings.
 - **updates**: the app checks the stable releases of this repo, tells you when a new one is out and shows the changelog. you decide when to update.
@@ -47,6 +49,7 @@ okay but for real, here's the stuff people actually ask:
   <img src="docs/screenshots/catalog.png" alt="Catalog with sound previews" width="49%">
   <img src="docs/screenshots/sound.png" alt="A sound's page with the sounds listed and a play button" width="49%">
   <img src="docs/screenshots/casual.png" alt="Casual tab" width="49%">
+  <img src="docs/screenshots/installed.png" alt="Installed tab, a pack with 8 items grouped in one card" width="49%">
   <img src="docs/screenshots/settings.png" alt="Settings" width="49%">
 </p>
 
@@ -76,7 +79,7 @@ windows might show a SmartScreen warning because the installer isn't code-signed
 
 | thing | where | when |
 |---|---|---|
-| mods you install | `tf/custom/<mod folder>` + `tf/custom/.suny/` (what was installed, so it can be removed cleanly) | install / remove, game closed |
+| mods you install | `tf/custom/<mod folder>` + `tf/custom/.suny/` (what was installed, so it can be removed cleanly) | install (new items work with the game open) / remove, game closed |
 | casual mods | the preloader changes `tf2_misc_*.vpk`, `gameinfo.txt` and `custom/_casual_preloader_*` | apply / revert, game closed. it keeps a copy of `gameinfo.txt` first |
 | app data | `%LOCALAPPDATA%\suny-tf2-supplier\casual` (preloader, your casual list, backups) | casual setup |
 | temp downloads | `%TEMP%\suny-tf2-supplier` | analyze / update. clear it in Settings |
