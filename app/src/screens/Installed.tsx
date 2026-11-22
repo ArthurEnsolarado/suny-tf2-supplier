@@ -1,9 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { call } from "../api";
-import type { CustomEntry, CustomReport, Inspect, ItemContents, Role } from "../types";
+import type { CustomEntry, CustomReport, Inspect, ItemContents, ManagedInfo, Role } from "../types";
 import { fmtBytes } from "../format";
 import { useI18n } from "../i18n";
 import { Badge, useAsync } from "../ui";
+import { Modal } from "./Modal";
 import { ModCard } from "./ModCard";
 
 interface Props {
@@ -15,12 +16,28 @@ interface Props {
   onChanged: () => void;
 }
 
+/** Um mod que ocupa vários itens em `custom` (um pacote com dezenas de `.vpk`, por exemplo) vira UM cartão. */
+interface Group {
+  key: string;
+  title: string;
+  managed: ManagedInfo | null;
+  entries: CustomEntry[];
+}
+
+/** "eyecrafter_a", "Eyecrafter_B", "sword2": a mesma raiz sem o sufixo de variante. Só serve para agrupar o que foi posto à mão. */
+const stemOf = (name: string): string =>
+  name
+    .replace(/\.vpk$/i, "")
+    .replace(/([\s._-]+([a-z]|v?\d+|\(\d+\))|\(\d+\)|\d+)$/i, "")
+    .trim();
+
 export function Installed({ inspect, loading, onGoHome, onGoCatalog, onChanged }: Props) {
   const { t, T, tc } = useI18n();
   const [showAllConflicts, setShowAllConflicts] = useState(false);
   const [confirm, setConfirm] = useState<string | undefined>();
   const [busy, setBusy] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
+  const [openGroup, setOpenGroup] = useState<string | undefined>();
 
   const roleLabel: Record<Role, string> = {
     mod: t("installed.role.mod"),
@@ -101,6 +118,41 @@ export function Installed({ inspect, loading, onGoHome, onGoCatalog, onChanged }
     </>
   );
 
+  const groupMeta = (g: Group, extra: string): ReactNode => (
+    <>
+      {`${t("installed.group.items", { n: g.entries.length })} · ${t("files", { n: g.entries.reduce((s, e) => s + e.file_count, 0) })} · ${fmtBytes(g.entries.reduce((s, e) => s + e.size_bytes, 0))}${extra}`}
+    </>
+  );
+  // Instalados pelo app: um cartão por mod (a chave é o slug), mesmo que ele ocupe dezenas de itens.
+  const mineGroups: Group[] = [];
+  for (const e of mine) {
+    const slug = e.managed!.slug;
+    const g = mineGroups.find((x) => x.key === slug);
+    if (g) g.entries.push(e);
+    else mineGroups.push({ key: slug, title: e.managed!.name, managed: e.managed, entries: [e] });
+  }
+  // À mão: só agrupa quando 3 ou mais itens têm a mesma raiz (ex.: pacote_01 ... pacote_32).
+  const stems = new Map<string, CustomEntry[]>();
+  for (const e of manual) {
+    const s = stemOf(e.name).toLowerCase();
+    stems.set(s, [...(stems.get(s) ?? []), e]);
+  }
+  const manualGroups: Group[] = [];
+  const seenStem = new Set<string>();
+  for (const e of manual) {
+    const s = stemOf(e.name).toLowerCase();
+    const bunch = stems.get(s) ?? [e];
+    if (s.length >= 4 && bunch.length >= 3) {
+      if (!seenStem.has(s)) {
+        seenStem.add(s);
+        manualGroups.push({ key: `stem:${s}`, title: stemOf(bunch[0]!.name), managed: null, entries: bunch });
+      }
+    } else {
+      manualGroups.push({ key: `one:${e.name}`, title: e.name, managed: null, entries: [e] });
+    }
+  }
+  const shownGroup = [...mineGroups, ...manualGroups].find((g) => g.key === openGroup);
+
   const remove = (slug: string) => {
     setBusy(slug);
     setError(undefined);
@@ -141,7 +193,7 @@ export function Installed({ inspect, loading, onGoHome, onGoCatalog, onChanged }
       )}
 
       <section aria-labelledby="h-mine">
-        <h2 id="h-mine">{t("installed.mine", { n: mine.length })}</h2>
+        <h2 id="h-mine">{t("installed.mine", { n: mineGroups.length })}</h2>
         {running && (
           <p>
             <Badge tone="warn" small>
@@ -150,7 +202,7 @@ export function Installed({ inspect, loading, onGoHome, onGoCatalog, onChanged }
             {t("installed.closeToRemove")}
           </p>
         )}
-        {mine.length === 0 ? (
+        {mineGroups.length === 0 ? (
           <p>
             {t("installed.none")}{" "}
             <button className="link" onClick={onGoCatalog}>
@@ -159,16 +211,17 @@ export function Installed({ inspect, loading, onGoHome, onGoCatalog, onChanged }
           </p>
         ) : (
           <ul className="mgrid">
-            {mine.map((e) => {
-              const m = e.managed!;
+            {mineGroups.map((g) => {
+              const m = g.managed!;
+              const many = g.entries.length > 1;
               return (
                 <ModCard
-                  key={e.name}
+                  key={g.key}
                   kind={m.kind}
                   gbId={m.gb_id}
                   title={m.name}
                   subtitle={m.submitter ? t("common.by", { who: m.submitter }) : undefined}
-                  meta={metaOf(e, m.version ? ` · v${m.version}` : "")}
+                  meta={many ? groupMeta(g, m.version ? ` · v${m.version}` : "") : metaOf(g.entries[0]!, m.version ? ` · v${m.version}` : "")}
                   flag={
                     <Badge tone="ok" small>
                       {t("card.installed")}
@@ -190,17 +243,24 @@ export function Installed({ inspect, loading, onGoHome, onGoCatalog, onChanged }
                         </div>
                       </div>
                     ) : (
-                      <button
-                        className="btn flat mini"
-                        disabled={running}
-                        title={running ? t("installed.closeToRemove") : undefined}
-                        onClick={() => {
-                          setError(undefined);
-                          setConfirm(m.slug);
-                        }}
-                      >
-                        {t("common.remove")}
-                      </button>
+                      <div className="row group-actions">
+                        {many && (
+                          <button className="btn flat mini" onClick={() => setOpenGroup(g.key)}>
+                            {t("installed.group.view", { n: g.entries.length })}
+                          </button>
+                        )}
+                        <button
+                          className="btn flat mini"
+                          disabled={running}
+                          title={running ? t("installed.closeToRemove") : undefined}
+                          onClick={() => {
+                            setError(undefined);
+                            setConfirm(m.slug);
+                          }}
+                        >
+                          {t("common.remove")}
+                        </button>
+                      </div>
                     )
                   }
                 />
@@ -211,23 +271,64 @@ export function Installed({ inspect, loading, onGoHome, onGoCatalog, onChanged }
       </section>
 
       <section aria-labelledby="h-manual">
-        <h2 id="h-manual">{t("installed.manual", { n: manual.length })}</h2>
+        <h2 id="h-manual">{t("installed.manual", { n: manualGroups.length })}</h2>
         <p className="muted">{t("installed.manual.note")}</p>
-        {manual.length > 0 && (
+        {manualGroups.length > 0 && (
           <ul className="mgrid">
-            {manual.map((e) => (
-              <ModCard
-                key={e.name}
-                kind={null}
-                gbId={null}
-                title={e.name}
-                meta={metaOf(e)}
-                actions={<span className="muted small">{t("installed.manual.readonly")}</span>}
-              />
-            ))}
+            {manualGroups.map((g) =>
+              g.entries.length > 1 ? (
+                <ModCard
+                  key={g.key}
+                  kind={null}
+                  gbId={null}
+                  title={g.title}
+                  subtitle={t("installed.group.manual")}
+                  meta={groupMeta(g, "")}
+                  flag={
+                    <Badge tone="neutral" small>
+                      {t("installed.group.items", { n: g.entries.length })}
+                    </Badge>
+                  }
+                  actions={
+                    <button className="btn flat mini" onClick={() => setOpenGroup(g.key)}>
+                      {t("installed.group.view", { n: g.entries.length })}
+                    </button>
+                  }
+                />
+              ) : (
+                <ModCard key={g.key} kind={null} gbId={null} title={g.entries[0]!.name} meta={metaOf(g.entries[0]!)} actions={<span className="muted small">{t("installed.manual.readonly")}</span>} />
+              ),
+            )}
           </ul>
         )}
       </section>
+
+      {shownGroup && (
+        <Modal onClose={() => setOpenGroup(undefined)} labelledBy="group-title">
+          <button className="btn flat modal-close" onClick={() => setOpenGroup(undefined)}>
+            {t("installed.group.close")}
+          </button>
+          <h2 id="group-title" className="modal-title">
+            {shownGroup.title}
+          </h2>
+          <p className="muted">
+            {shownGroup.managed ? (shownGroup.managed.submitter ? t("common.by", { who: shownGroup.managed.submitter }) : "") : t("installed.group.manual")}
+            {" · "}
+            {t("installed.group.items", { n: shownGroup.entries.length })} · {t("files", { n: shownGroup.entries.reduce((s, e) => s + e.file_count, 0) })} · {fmtBytes(shownGroup.entries.reduce((s, e) => s + e.size_bytes, 0))}
+          </p>
+          <ul className="group-list">
+            {shownGroup.entries.map((e) => (
+              <li key={e.name}>
+                <div>
+                  <b>{e.name}</b>
+                  <div className="muted small">{`${t("files", { n: e.file_count })} · ${fmtBytes(e.size_bytes)}`}</div>
+                </div>
+                {tags(e.name)}
+              </li>
+            ))}
+          </ul>
+        </Modal>
+      )}
 
       {contents.loading && !report && (
         <p className="muted small" role="status">

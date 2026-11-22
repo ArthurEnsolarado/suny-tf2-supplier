@@ -3,6 +3,25 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.10.0
+
+This version keeps the 0.8.1 look (the one testers liked) and adds what they asked for. The calm dark redesign that was tried in 0.9.0 and 0.9.1 is not part of it.
+
+### Added
+- **Class row in the Catalog**: the face of each class (read from your own game) works as a shortcut to that class's category, `Skins > The Scout` for mods and `Character Voice > Scout Voice` for sounds.
+- **One place to install**: the file card now asks *Where will you play?* (Casual on Valve's servers, or Offline and community) and shows only the right button, with a short explanation of the difference. **Maps** never offer Casual: the Casual Preloader doesn't load maps.
+- **Install with the game open**: new items can be copied to `custom` while TF2 is running, with a **Restart the game** button (asks first, because leaving a match counts as abandoning). Removing, reinstalling and applying the preloader still need the game closed.
+- **Installed**: all the items of one mod are one card, with a window that lists them. Hand-made items with the same root name (`pack_01`, `pack_02`, ...) are grouped too.
+- Preview errors on sound cards appear as a readable message instead of a tiny overlay.
+
+### Fixed
+- Searching by name no longer locks the order and the category. The search now goes through the same listing as the rest of the Catalog.
+- The category tree only shows the expand arrow when the category really has children.
+- Catalog and file pictures are sharper: cards use the 800 px version and the file page uses the original image.
+- The file page fits the window (each column scrolls on its own), so the install button no longer sits below the fold.
+- Casual: *Apply* and *So the game opens with the mods* sit side by side instead of leaving half the screen empty.
+- The top bar no longer overflows (and cuts the build label) on windows around 1440 px wide.
+
 ## 0.8.1
 
 ### Fixed

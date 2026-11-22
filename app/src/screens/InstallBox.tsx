@@ -2,6 +2,7 @@ import { useState } from "react";
 import { call } from "../api";
 import { useI18n } from "../i18n";
 import type { FileInfo, InstallOutcome, Kind } from "../types";
+import { RestartButton } from "./RestartButton";
 import { Badge } from "../ui";
 
 type Phase =
@@ -61,10 +62,10 @@ export function InstallBox({ installRoot, kind, modId, file, gameRunning, onChan
   if (phase.t === "idle") {
     return (
       <p>
-        <button className="btn" onClick={() => setPhase({ t: "confirm" })} disabled={gameRunning} title={gameRunning ? t("install.closeGame") : undefined}>
+        <button className="btn" onClick={() => setPhase({ t: "confirm" })}>
           {t("install.button")}
         </button>
-        <span className="muted small install-hint">{gameRunning ? t("install.closeGame") : t("install.hint")}</span>
+        <span className="muted small install-hint">{gameRunning ? t("install.openNote") : t("install.hint")}</span>
       </p>
     );
   }
@@ -76,7 +77,7 @@ export function InstallBox({ installRoot, kind, modId, file, gameRunning, onChan
           <T k="install.confirm" />
         </p>
         <div className="row">
-          <button className="btn primary" onClick={run} disabled={gameRunning}>
+          <button className="btn primary" onClick={run}>
             {t("install.confirmButton")}
           </button>
           <button className="btn flat" onClick={() => setPhase({ t: "idle" })}>
@@ -131,9 +132,12 @@ export function InstallBox({ installRoot, kind, modId, file, gameRunning, onChan
           {t("install.rgl")}
         </p>
       )}
-      <p className="muted">
-        <T k="install.notCasual" />
-      </p>
+      {gameRunning && (
+        <>
+          <p className="muted">{t("install.openNote")}</p>
+          <RestartButton path={installRoot} />
+        </>
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Browse } from "./screens/Browse";
 import { Casual } from "./screens/Casual";
 import { Home } from "./screens/Home";
 import { Installed } from "./screens/Installed";
+import { RestartButton } from "./screens/RestartButton";
 import { Settings } from "./screens/Settings";
 import { UpdateDialog } from "./screens/UpdateDialog";
 import { useUpdate } from "./update";
@@ -166,6 +167,8 @@ export function App() {
 
   // Ícones de classe do próprio jogo (do disco do usuário). Sem o jogo, o app segue sem eles.
   const icons = useAsync<GameIcons | null>(() => (path ? call<GameIcons>("game_icons", { path }).catch(() => null) : Promise.resolve(null)), [path]);
+  // Retratos das classes (o rosto dos personagens), para a fileira de classes do Catálogo.
+  const portraits = useAsync<GameIcons | null>(() => (path ? call<GameIcons>("class_portraits", { path }).catch(() => null) : Promise.resolve(null)), [path]);
 
   // Botão de jogar: abre o TF2 pelo Steam. Fica indisponível enquanto o jogo abre e enquanto ele está aberto.
   const [launching, setLaunching] = useState(false);
@@ -210,6 +213,7 @@ export function App() {
           ))}
         </nav>
         <div className="top-actions">
+          {running && <RestartButton path={path} compact />}
           <div className="chip" title={t("build.title")}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="square" aria-hidden="true">
               <path d="M4 7h16M4 12h16M4 17h10" />
@@ -261,6 +265,7 @@ export function App() {
               installRoot={inspect.data?.installation.root}
               installed={installed}
               icons={icons.data?.icons ?? {}}
+              portraits={portraits.data?.icons ?? {}}
               onChanged={inspect.reload}
               gameRunning={running}
               casual={{ ready: casual.data?.runtime === "ready", unknown: !casual.data, onGo: () => go("casual"), onAdded: casual.reload }}

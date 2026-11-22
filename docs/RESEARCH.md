@@ -253,3 +253,19 @@ React 19 + TypeScript + Vite 8, `zustand` (estado) e `@tanstack/react-query` (ca
 - Regras RGL (mods): https://docs.rgl.gg/rules/global/1003/#examples-of-not-allowed-mods
 - ModBoy (listagem winget): https://wingetly.io/apps/gamebanana/modboy · thread Steam: https://steamcommunity.com/app/440/discussions/0/3768987637134361887
 - Crates e npm: versões conferidas por `cargo search` / `npm view` em 21/11/2026.
+
+
+## Casual contra custom (pesquisa de 2026-11-22)
+
+Fonte: a documentação oficial do Casual Preloader (`cueki.github.io/casual-pre-loader`: *how it works*, *tutorial*, *faq*, *troubleshooting*). A página `Sv_pure` da wiki da Valve respondeu 403 e não foi lida.
+
+- **Por que `custom` não vale no casual:** os servidores da Valve mandam uma lista de caminhos permitidos (`sv_pure`) e o cliente recarrega o padrão do jogo para o que não passa. O Preloader usa 5 desvios dessa verificação (linha do `gameinfo.txt`, hash de MD5 do VPK sem checagem, persistência de materiais por VGUI, cadeia de dependências de modelos, diretórios aninhados) e por isso modifica o jogo.
+- **"Todos os seus mods devem ficar no Preloader, não em custom"**, com duas exceções: HUD (pode ficar em `custom`, o Preloader faz o mesmo) e configs.
+- **Funciona no Preloader:** partículas, modelos, animações, VGUI, lightwarps, skyboxes, warpaints e sons do jogo (menos os da lista negra). **Não funciona:** decalques, **mapas** (conteúdo empacotado em `.bsp`), sons da lista negra e nomes de material/modelo fora dos caminhos do TF2.
+- **Animações:** funcionam, e o pacote de animações vai por último na ordem de carga.
+- **Ordem de carga:** em conflito, o número maior vence. A ordem alfabética de `custom` (onde o primeiro vence, usada na aba Instalado) e a ordem de carga do Preloader são coisas diferentes.
+- **`+exec w/config.cfg`** é obrigatório. O primeiro carregamento passa por um mapa offline.
+- **Depois de atualizar o TF2**, rodar o Preloader de novo.
+- **Risco:** partículas customizadas podem dar banimento em ligas competitivas (a FAQ cita 1 ano). O app já recusa partículas dentro de `.vpk`.
+- **API do GameBanana (conferida):** `_aFilters[Generic_Name]=contains,<texto>` funciona no `Index` junto com ordem e categoria; as categorias trazem `_nCategoryCount` (quantas filhas); não existe filtro por tag.
+- **Retratos das classes:** `materials/vgui/class_portraits/<classe>.vtf` (256 px, também `_blue` e `_grey`) em `tf2_textures_dir.vpk`.

@@ -436,6 +436,55 @@ pub fn to_glyph(img: &mut Image) {
     }
 }
 
+/// Retratos das classes (o rosto de cada personagem), da pasta de texturas do jogo. A chave é a mesma de `CLASS_ICONS`.
+pub const CLASS_PORTRAITS: &[(&str, &str)] = &[
+    ("all", "materials/vgui/class_portraits/all_class.vtf"),
+    ("scout", "materials/vgui/class_portraits/scout.vtf"),
+    ("soldier", "materials/vgui/class_portraits/soldier.vtf"),
+    ("pyro", "materials/vgui/class_portraits/pyro.vtf"),
+    ("demoman", "materials/vgui/class_portraits/demoman.vtf"),
+    ("heavy", "materials/vgui/class_portraits/heavy.vtf"),
+    ("engineer", "materials/vgui/class_portraits/engineer.vtf"),
+    ("medic", "materials/vgui/class_portraits/medic.vtf"),
+    ("sniper", "materials/vgui/class_portraits/sniper.vtf"),
+    ("spy", "materials/vgui/class_portraits/spy.vtf"),
+];
+
+/// Reduz a imagem à metade (média de 2x2 pixels). Os retratos têm 256 px; na interface bastam 128, e o texto que
+/// passa pela ponte fica 4 vezes menor.
+pub fn downscale_half(img: &Image) -> Image {
+    let (w, h) = ((img.width / 2).max(1), (img.height / 2).max(1));
+    let src = |x: u32, y: u32, c: usize| u32::from(img.rgba[((y.min(img.height - 1) * img.width + x.min(img.width - 1)) * 4) as usize + c]);
+    let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+    for y in 0..h {
+        for x in 0..w {
+            for c in 0..4 {
+                let sum = src(2 * x, 2 * y, c) + src(2 * x + 1, 2 * y, c) + src(2 * x, 2 * y + 1, c) + src(2 * x + 1, 2 * y + 1, c);
+                rgba.push(((sum + 2) / 4) as u8);
+            }
+        }
+    }
+    Image { width: w, height: h, rgba }
+}
+
+/// Lê os retratos das classes do jogo, já em 128 px (data URL PNG). Nunca falha: o que não der para ler fica de fora.
+pub fn load_class_portraits(tf_dir: &Path) -> GameIcons {
+    let wanted: Vec<&str> = CLASS_PORTRAITS.iter().map(|(_, p)| *p).collect();
+    let Ok(vpk) = Vpk::open(&tf_dir.join("tf2_textures_dir.vpk"), |p| wanted.contains(&p)) else {
+        return GameIcons::default();
+    };
+    let mut icons = HashMap::new();
+    for (key, path) in CLASS_PORTRAITS {
+        let Ok(bytes) = vpk.read(path) else { continue };
+        let Ok(img) = decode_vtf(&bytes) else { continue };
+        let small = if img.width > 160 { downscale_half(&img) } else { img };
+        if let Ok(png) = encode_png(&small) {
+            icons.insert((*key).to_string(), format!("data:image/png;base64,{}", STANDARD.encode(png)));
+        }
+    }
+    GameIcons { icons }
+}
+
 /// Converte um arquivo do VPK em PNG (data URL).
 fn icon_data_url(vpk: &Vpk, path: &str) -> Result<String> {
     let mut img = decode_vtf(&vpk.read(path)?)?;
@@ -663,6 +712,25 @@ pub(crate) mod tests {
         std::fs::remove_file(d.join("tf2_textures_000.vpk")).unwrap();
         assert_eq!(list_paths(&dir_vpk, |_| true).unwrap().len(), 3);
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn downscaling_averages_two_by_two_blocks_and_keeps_alpha() {
+        let img = Image { width: 2, height: 2, rgba: vec![0, 0, 0, 255, 100, 100, 100, 255, 100, 100, 100, 255, 200, 200, 200, 255] };
+        let half = downscale_half(&img);
+        assert_eq!((half.width, half.height), (1, 1));
+        assert_eq!(half.rgba, vec![100, 100, 100, 255]);
+        let odd = Image { width: 3, height: 1, rgba: vec![9; 12] };
+        let h = downscale_half(&odd);
+        assert_eq!((h.width, h.height), (1, 1), "tamanho ímpar não estoura");
+    }
+
+    #[test]
+    fn portraits_cover_every_class_the_icons_cover_and_a_missing_game_gives_nothing() {
+        let icon_keys: Vec<&str> = CLASS_ICONS.iter().map(|(k, _)| *k).collect();
+        let portrait_keys: Vec<&str> = CLASS_PORTRAITS.iter().map(|(k, _)| *k).collect();
+        assert_eq!(icon_keys, portrait_keys);
+        assert!(load_class_portraits(std::path::Path::new("Z:/nao/existe")).icons.is_empty());
     }
 
     #[test]

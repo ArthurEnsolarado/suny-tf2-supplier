@@ -258,6 +258,7 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
             <p className="muted small">{t("casual.list.particlesNote")}</p>
           </section>
 
+          <div className="cols2">
           <section className="state" aria-labelledby="h-apply">
             <h2 id="h-apply">{t("casual.apply.title")}</h2>
             {!root ? (
@@ -372,6 +373,7 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
               </li>
             </ol>
           </section>
+          </div>
         </>
       )}
 

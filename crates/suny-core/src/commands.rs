@@ -306,6 +306,26 @@ fn resolve(path: &str) -> Result<Installation, String> {
     Installation::from_path(Path::new(path)).map_err(|e| e.to_string())
 }
 
+/// Abre o TF2 pelo Steam (o jogo precisa estar fechado). Com o Casual Preloader aplicado, o jogo precisa abrir com
+/// `+exec w/config.cfg` (é ele que deixa os modelos aparecerem): se o Steam não tem isso nas opções do usuário, acrescenta.
+async fn launch_tf2(path: Option<String>) -> Result<Value, String> {
+    let extra = tokio::task::spawn_blocking(move || {
+        let found = path.and_then(|s| resolve(&s).ok())?;
+        if !library::preloader_state(&found).applied() {
+            return None;
+        }
+        casual::extra_launch_args(casual::steam_launch_options().as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    let url = match &extra {
+        Some(opts) => steam_run_url_with_args(crate::TF2_APP_ID, opts),
+        None => steam_run_url(crate::TF2_APP_ID),
+    };
+    open_steam_url(&url)?;
+    Ok(json!({ "launched": true, "added_launch_options": extra }))
+}
+
 pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, String> {
     match name {
         // Steam + pastas comuns. `tried` e `steam_dir` explicam o resultado quando nada é achado.
@@ -423,11 +443,15 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
         .await
         .map_err(|e| e.to_string())?,
 
-        // Baixa do GameBanana e instala em tf/custom. Só .zip, só com o jogo fechado.
+        // Baixa do GameBanana e instala em tf/custom. Com o jogo aberto só instala item NOVO: os arquivos novos entram sem
+        // problema (o jogo os lê quando abrir de novo), mas reinstalar por cima mexeria em arquivos que o jogo segura.
         "install_mod" => {
             let p: InstallArgs = args(a)?;
             let install = resolve(&p.path)?;
-            ensure_game_closed(install.root.clone()).await?;
+            let game_open = {
+                let root = install.root.clone();
+                tokio::task::spawn_blocking(move || system::game_running(Some(&root))).await.map_err(|e| e.to_string())?
+            };
 
             let details = client.details(p.kind, p.id).await.map_err(|e| e.to_string())?;
             let file = details
@@ -458,6 +482,10 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
                 md5: file.md5.clone(),
             };
             let custom = install.custom_dir();
+            if game_open && custom.join(installer::slug_for(&meta)).exists() {
+                let _ = std::fs::remove_file(&staging);
+                return Err(Error::GameRunning.to_string());
+            }
             let zip_path = staging.clone();
             let outcome = tokio::task::spawn_blocking(move || installer::install_zip(&zip_path, &custom, meta))
                 .await
@@ -483,24 +511,34 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
             if running {
                 return Err("O TF2 já está aberto.".into());
             }
-            // Com o Casual Preloader aplicado, o jogo precisa abrir com `+exec w/config.cfg` (é ele que deixa os modelos
-            // aparecerem). Se o Steam não tem isso nas opções do usuário, o Play acrescenta.
             let p: GameStateArgs = args(a)?;
-            let extra = tokio::task::spawn_blocking(move || {
-                let found = p.path.and_then(|s| resolve(&s).ok())?;
-                if !library::preloader_state(&found).applied() {
-                    return None;
+            launch_tf2(p.path).await
+        }
+
+        // Fecha o TF2 (pedido educado, nunca força), espera ele sair e abre de novo. Serve para um mod instalado com o
+        // jogo aberto passar a valer. Se o jogo não fechar sozinho em ~40 s, avisa e não faz mais nada.
+        "restart_game" => {
+            let p: GameStateArgs = args(a)?;
+            let root = p.path.as_deref().and_then(|s| resolve(s).ok()).map(|i| i.root);
+            let r2 = root.clone();
+            let asked = tokio::task::spawn_blocking(move || system::request_game_close(r2.as_deref())).await.map_err(|e| e.to_string())?;
+            if asked == 0 {
+                return launch_tf2(p.path).await; // já estava fechado: só abre
+            }
+            let mut closed = false;
+            for _ in 0..80 {
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                let r3 = root.clone();
+                if !tokio::task::spawn_blocking(move || system::game_running(r3.as_deref())).await.map_err(|e| e.to_string())? {
+                    closed = true;
+                    break;
                 }
-                casual::extra_launch_args(casual::steam_launch_options().as_deref())
-            })
-            .await
-            .map_err(|e| e.to_string())?;
-            let url = match &extra {
-                Some(opts) => steam_run_url_with_args(crate::TF2_APP_ID, opts),
-                None => steam_run_url(crate::TF2_APP_ID),
-            };
-            open_steam_url(&url)?;
-            Ok(json!({ "launched": true, "added_launch_options": extra }))
+            }
+            if !closed {
+                return Err("O TF2 não fechou sozinho. Feche o jogo você mesmo (talvez ele esteja numa tela de confirmação) e abra de novo pelo botão Jogar.".into());
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await; // dá tempo ao Steam de notar que o jogo saiu
+            launch_tf2(p.path).await
         }
 
         // Atualizações do app: consulta as releases estáveis do repositório no GitHub (não manda nenhum dado seu).
@@ -584,6 +622,18 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
             tokio::task::spawn_blocking(move || match resolve(&p.path) {
                 _ if no_game_art() => out(gameicons::GameIcons::default()),
                 Ok(install) => out(gameicons::load_class_icons(&install.tf_dir)),
+                Err(_) => out(gameicons::GameIcons::default()),
+            })
+            .await
+            .map_err(|e| e.to_string())?
+        }
+
+        // Retratos das classes (o rosto dos personagens), lidos do jogo do usuário. Vazio sem o jogo.
+        "class_portraits" => {
+            let p: PathArgs = args(a)?;
+            tokio::task::spawn_blocking(move || match resolve(&p.path) {
+                _ if no_game_art() => out(gameicons::GameIcons::default()),
+                Ok(install) => out(gameicons::load_class_portraits(&install.tf_dir)),
                 Err(_) => out(gameicons::GameIcons::default()),
             })
             .await
