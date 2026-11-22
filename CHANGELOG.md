@@ -3,6 +3,11 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.11.1
+
+### Fixed
+- **The "Restart the game" confirmation can be clicked again.** Its box opens under the top bar, and the page below was painted over it, so the buttons did not react and the box overlapped the status badge on every screen. The top bar now sits above the page.
+
 ## 0.11.0
 
 ### Added
