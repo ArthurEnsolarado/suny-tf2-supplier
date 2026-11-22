@@ -49,7 +49,11 @@ export function useSoundPreview() {
       try {
         let p = cache.current.get(id);
         if (!p) {
-          const r = await call<{ data_url: string; name: string; total: number }>("sound_preview", { kind: "Sound", id });
+          // O núcleo já tem limite de tempo; este é só o cinto de segurança para a tela nunca girar para sempre.
+          const r = await Promise.race([
+            call<{ data_url: string; name: string; total: number }>("sound_preview", { kind: "Sound", id }),
+            new Promise<never>((_, rej) => setTimeout(() => rej(new Error("A prévia demorou demais. Abra a ficha e use Analisar, ou tente de novo.")), 135_000)),
+          ]);
           p = { url: r.data_url, name: r.name, total: r.total };
           cache.current.set(id, p);
           if (cache.current.size > 12) cache.current.delete(cache.current.keys().next().value as number);

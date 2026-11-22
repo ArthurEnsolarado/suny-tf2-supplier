@@ -45,7 +45,7 @@ function classKey(name: string): string | undefined {
 const CLASS_ORDER = ["scout", "soldier", "pyro", "demoman", "heavy", "engineer", "medic", "sniper", "spy"] as const;
 const CLASS_LABEL: Record<string, string> = { scout: "Scout", soldier: "Soldier", pyro: "Pyro", demoman: "Demoman", heavy: "Heavy", engineer: "Engineer", medic: "Medic", sniper: "Sniper", spy: "Spy" };
 
-type ClassCats = Record<string, { id: number; path: string[] }>;
+type ClassCats = Record<string, { id: number; path: string[]; chain: number[] }>;
 const classCatsCache = new Map<Kind, Promise<ClassCats>>();
 
 /** Acha, no GameBanana, a categoria de cada classe: nos mods `Skins > The Scout`, nos sons `Character Voice > Scout Voice`. */
@@ -61,7 +61,7 @@ function loadClassCats(kind: Kind): Promise<ClassCats> {
         const out: ClassCats = {};
         for (const k of kids) {
           const key = classKey(k.name.replace(/\s+voice$/i, ""));
-          if (key) out[key] = { id: k.id, path: [parent.name, k.name] };
+          if (key) out[key] = { id: k.id, path: [parent.name, k.name], chain: [parent.id, k.id] };
         }
         return out;
       })
@@ -75,7 +75,20 @@ function loadClassCats(kind: Kind): Promise<ClassCats> {
 }
 
 /** Fileira de classes no topo: o rosto de cada personagem (do próprio jogo). Atalho para a categoria da classe. */
-function ClassRow({ kind, portraits, selected, onPick }: { kind: Kind; portraits: GameIcons["icons"]; selected: number | undefined; onPick: (id: number | undefined, path: string[]) => void }) {
+function ClassRow({
+  kind,
+  portraits,
+  selected,
+  catPath,
+  onPick,
+}: {
+  kind: Kind;
+  portraits: GameIcons["icons"];
+  selected: number | undefined;
+  /** Caminho (nomes) da categoria escolhida, para a classe continuar marcada quando se entra numa subcategoria dela. */
+  catPath: string[];
+  onPick: (id: number | undefined, path: string[], chain: number[]) => void;
+}) {
   const { t } = useI18n();
   const cats = useAsync<ClassCats>(() => loadClassCats(kind), [kind]);
   const have = CLASS_ORDER.filter((k) => cats.data?.[k]);
@@ -84,7 +97,7 @@ function ClassRow({ kind, portraits, selected, onPick }: { kind: Kind; portraits
     <div className="classes" role="group" aria-label={t("browse.classes")}>
       {have.map((k) => {
         const c = cats.data![k]!;
-        const on = selected === c.id;
+        const on = selected === c.id || (catPath.length >= c.path.length && c.path.every((n, i) => catPath[i] === n));
         return (
           <button
             key={k}
@@ -92,7 +105,7 @@ function ClassRow({ kind, portraits, selected, onPick }: { kind: Kind; portraits
             className={`class-chip ${on ? "on" : ""}`}
             aria-pressed={on}
             title={t(kind === "Mod" ? "browse.class.mod" : "browse.class.sound", { name: CLASS_LABEL[k] ?? k })}
-            onClick={() => (on ? onPick(undefined, []) : onPick(c.id, c.path))}
+            onClick={() => (on ? onPick(undefined, [], []) : onPick(c.id, c.path, c.chain))}
           >
             {portraits[k] ? <img src={portraits[k]} alt="" /> : <span className="class-face" aria-hidden="true">{(CLASS_LABEL[k] ?? k).slice(0, 1)}</span>}
             <span>{CLASS_LABEL[k] ?? k}</span>
@@ -156,6 +169,8 @@ export function Browse({ installRoot, installed, icons, portraits, onChanged, ga
   const [sort, setSort] = useState<Sort>("MostDownloaded");
   const [category, setCategory] = useState<number | undefined>();
   const [catPath, setCatPath] = useState<string[]>([]);
+  /** Ids de categorias que a árvore deve abrir (o ramo da classe escolhida). */
+  const [reveal, setReveal] = useState<number[]>([]);
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<{ kind: Kind; id: number; root?: string } | undefined>();
@@ -184,6 +199,7 @@ export function Browse({ installRoot, installed, icons, portraits, onChanged, ga
     setKind(k);
     setCategory(undefined);
     setCatPath([]);
+    setReveal([]);
   };
 
   return (
@@ -199,9 +215,11 @@ export function Browse({ installRoot, installed, icons, portraits, onChanged, ga
         kind={kind}
         portraits={portraits}
         selected={category}
-        onPick={(id, path) => {
+        catPath={catPath}
+        onPick={(id, path, chain) => {
           setCategory(id);
           setCatPath(path);
+          setReveal(chain);
         }}
       />
 
@@ -257,6 +275,7 @@ export function Browse({ installRoot, installed, icons, portraits, onChanged, ga
         <CategoryTree
           kind={kind}
           selected={category}
+          reveal={reveal}
           icons={icons}
           onSelect={(id, path) => {
             setCategory(id);
@@ -378,11 +397,14 @@ export function Browse({ installRoot, installed, icons, portraits, onChanged, ga
 function CategoryTree({
   kind,
   selected,
+  reveal,
   icons,
   onSelect,
 }: {
   kind: Kind;
   selected: number | undefined;
+  /** Categorias que devem ficar abertas (o ramo da classe escolhida). */
+  reveal: number[];
   icons: GameIcons["icons"];
   onSelect: (id: number | undefined, path: string[]) => void;
 }) {
@@ -396,6 +418,21 @@ function CategoryTree({
     setKids({});
     setExpanded(new Set());
   }, [kind]);
+
+  // A classe escolhida no topo abre o ramo dela na árvore, para dar para escolher a subcategoria (chapéus, armas...).
+  useEffect(() => {
+    for (const id of reveal) {
+      setExpanded((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+      setKids((prev) => {
+        if (prev[id] !== undefined) return prev;
+        call<Category[]>("gb_categories", { kind, parent: id }).then(
+          (list) => setKids((p) => ({ ...p, [id]: sortCats(list) })),
+          () => setKids((p) => ({ ...p, [id]: "error" })),
+        );
+        return { ...prev, [id]: "loading" };
+      });
+    }
+  }, [reveal, kind]);
 
   const toggle = (c: Category) => {
     const isOpen = expanded.has(c.id);

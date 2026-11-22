@@ -3,6 +3,14 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.10.1
+
+### Fixed
+- **Sound previews no longer load forever.** For `.zip` packs the app now reads only the file index and one sample straight from GameBanana (an 18 MB voice pack costs a few hundred KB instead of the whole download). Packs that still need the full download (`.rar`) stop after 2 minutes with a clear message instead of spinning.
+- **The class stays selected** when you enter one of its subcategories (for example *Skins > The Scout > Animations*), and the category tree opens the class's branch so you can pick it. Picking a category from another branch clears the class, as it should. Changing the order never cleared it.
+- **File page images are no longer cropped.** The original picture is shown whole inside a fixed box (some pictures bring their own black bars, which still show).
+- On narrow windows the picture no longer overlaps the install area.
+
 ## 0.10.0
 
 This version keeps the 0.8.1 look (the one testers liked) and adds what they asked for. The calm dark redesign that was tried in 0.9.0 and 0.9.1 is not part of it.

@@ -309,6 +309,37 @@ pub struct Client {
 
 /// 1 tentativa + 2 repetições.
 const ATTEMPTS: u32 = 3;
+/// Limite de um pedido de trecho (Range).
+const RANGE_TIMEOUT: Duration = Duration::from_secs(30);
+/// Maior trecho aceito numa resposta de Range (o servidor pode mandar mais do que pedimos).
+const MAX_RANGE_BYTES: usize = 16 << 20;
+
+/// Que parte do arquivo pedir.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RangeSpec {
+    /// Os últimos N bytes.
+    Suffix(u64),
+    /// De `a` até `b`, inclusive.
+    Span(u64, u64),
+}
+
+/// Um trecho de arquivo baixado.
+#[derive(Debug)]
+pub struct RangeReply {
+    pub bytes: Vec<u8>,
+    /// Onde o trecho começa dentro do arquivo.
+    pub start: u64,
+    /// Tamanho total do arquivo, quando o servidor informa.
+    pub total: Option<u64>,
+}
+
+/// `Content-Range: bytes 100-199/1000` → (100, Some(1000)).
+fn parse_content_range(v: &str) -> Option<(u64, Option<u64>)> {
+    let rest = v.trim().strip_prefix("bytes")?.trim();
+    let (span, total) = rest.split_once('/')?;
+    let start = span.split('-').next()?.trim().parse().ok()?;
+    Some((start, total.trim().parse().ok()))
+}
 /// Tentativas de um download: cada uma continua de onde a anterior caiu.
 const DOWNLOAD_ATTEMPTS: u32 = 6;
 /// Limite das consultas curtas (listas, fichas).
@@ -460,6 +491,37 @@ impl Client {
             let _ = std::fs::remove_file(dest);
         }
         result
+    }
+
+    /// Pede só um trecho de um arquivo do GameBanana (Range). Serve para ouvir uma amostra sem baixar o pacote inteiro.
+    /// Se o servidor ignorar o Range, só aceita a resposta quando o arquivo todo for pequeno; senão, é erro (quem chama
+    /// cai no caminho de baixar tudo).
+    pub async fn get_range(&self, file: &FileInfo, spec: RangeSpec) -> Result<RangeReply> {
+        if !file.download_url.starts_with(&self.dl_prefix) {
+            return Err(Error::Blocked(format!("endereço de download fora do GameBanana: {}", file.download_url)));
+        }
+        let header = match spec {
+            RangeSpec::Suffix(n) => format!("bytes=-{n}"),
+            RangeSpec::Span(a, b) => format!("bytes={a}-{b}"),
+        };
+        let resp = self.http.get(&file.download_url).header("Range", header).timeout(RANGE_TIMEOUT).send().await?;
+        let status = resp.status();
+        if status == reqwest::StatusCode::PARTIAL_CONTENT {
+            let cr = resp.headers().get(reqwest::header::CONTENT_RANGE).and_then(|v| v.to_str().ok()).and_then(parse_content_range);
+            let bytes = resp.bytes().await?;
+            if bytes.len() > MAX_RANGE_BYTES {
+                return Err(Error::TooLarge("o servidor mandou um trecho maior que o limite".into()));
+            }
+            let (start, total) = cr.ok_or_else(|| Error::Network("resposta de Range sem Content-Range".into()))?;
+            return Ok(RangeReply { bytes: bytes.to_vec(), start, total });
+        }
+        if status == reqwest::StatusCode::OK && resp.content_length().is_some_and(|n| n as usize <= MAX_RANGE_BYTES / 8) {
+            // o arquivo inteiro é pequeno e o servidor mandou tudo: serve como trecho único
+            let bytes = resp.bytes().await?;
+            let total = bytes.len() as u64;
+            return Ok(RangeReply { bytes: bytes.to_vec(), start: 0, total: Some(total) });
+        }
+        Err(Error::Network(format!("o servidor não aceitou pedir só um trecho ({status})")))
     }
 
     /// Atenção: para listar as FILHAS de uma categoria o `_idGameRow` NÃO pode ir junto

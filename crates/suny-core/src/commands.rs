@@ -121,6 +121,10 @@ struct CasualApplyArgs {
 
 /// Prévia direto do catálogo: só arquivos de até 25 MiB (o resto pede o Analisar da ficha).
 const PREVIEW_MAX_FILE: u64 = 25 << 20;
+/// A leitura rápida (índice + uma amostra) não pode demorar mais que isto; passou, tenta o caminho completo.
+const PREVIEW_QUICK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(25);
+/// Baixar o pacote inteiro só para a prévia: passou disto, avisa em vez de rodar para sempre.
+const PREVIEW_FULL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 
 /// Limite de download de um mod (1 GiB).
 const MAX_DOWNLOAD: u64 = 1 << 30;
@@ -377,8 +381,31 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
                 .find(|f| !f.contains_exe() && archive::format_of(&f.file_name).is_some() && f.size <= PREVIEW_MAX_FILE)
                 .ok_or_else(|| "Este item não tem um arquivo pequeno o bastante para a prévia. Abra a ficha e use Analisar.".to_string())?;
             let dest = cached_zip(p.kind, file.id);
+            // 1º: tenta ler só o índice do zip e UMA amostra (poucos KB na rede). Só cai no download inteiro se der errado.
+            if !dest.is_file() && archive::format_of(&file.file_name) == Some(archive::Format::Zip) {
+                let quick = tokio::time::timeout(PREVIEW_QUICK_TIMEOUT, crate::remotezip::preview_audio(client, file, analysis::MAX_PREVIEW_BYTES)).await;
+                match quick {
+                    Ok(Ok(Some(a))) => {
+                        return Ok(json!({
+                            "file_id": file.id,
+                            "name": a.name,
+                            "total": a.total,
+                            "data_url": format!("data:{};base64,{}", a.mime, STANDARD.encode(a.bytes)),
+                        }));
+                    }
+                    Ok(Ok(None)) => return Err("Este pacote não tem áudio que dê para tocar (.wav, .mp3 ou .ogg de até 12 MB).".to_string()),
+                    _ => {} // Range indisponível, índice grande demais, rede lenta...: baixa o pacote como antes
+                }
+            }
             if !dest.is_file() {
-                fetch_as_zip(client, file, &dest, MAX_ANALYSIS_DOWNLOAD).await?;
+                let fetched = tokio::time::timeout(PREVIEW_FULL_TIMEOUT, fetch_as_zip(client, file, &dest, MAX_ANALYSIS_DOWNLOAD)).await;
+                match fetched {
+                    Ok(r) => r?,
+                    Err(_) => {
+                        let _ = std::fs::remove_file(&dest);
+                        return Err("A prévia demorou demais: este pacote é grande e a conexão está lenta. Abra a ficha e use Analisar, ou tente de novo.".to_string());
+                    }
+                }
             }
             prune_cache(&analysis_cache_dir(), &dest);
             let file_id = file.id;

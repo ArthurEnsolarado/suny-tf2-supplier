@@ -15,6 +15,7 @@ pub mod installer;
 pub mod library;
 pub mod logs;
 pub mod replaces;
+pub mod remotezip;
 pub mod scanner;
 pub mod steam;
 pub mod system;
