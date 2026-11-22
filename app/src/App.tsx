@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { call } from "./api";
+import { Backdrop } from "./Backdrop";
+import { useFeatured, useSlideshow, type Slide } from "./featured";
 import { useI18n, type TKey } from "./i18n";
 import logo from "./assets/logo.png";
 import { Browse } from "./screens/Browse";
 import { Casual } from "./screens/Casual";
 import { Home } from "./screens/Home";
 import { Installed } from "./screens/Installed";
+import { PlayButton } from "./screens/PlayButton";
 import { Settings } from "./screens/Settings";
 import { UpdateDialog } from "./screens/UpdateDialog";
 import { useUpdate } from "./update";
@@ -15,18 +18,13 @@ import { Icon, useAsync, type IconName } from "./ui";
 
 type Tab = "home" | "browse" | "casual" | "installed" | "settings";
 
-/** Menu lateral: telas agrupadas pelo que o usuário quer fazer. */
-const NAV: { label: TKey; tabs: { id: Tab; label: TKey; icon: IconName }[] }[] = [
-  { label: "nav.group.general", tabs: [{ id: "home", label: "tab.home", icon: "home" }] },
-  {
-    label: "nav.group.mods",
-    tabs: [
-      { id: "browse", label: "tab.browse", icon: "catalog" },
-      { id: "casual", label: "tab.casual", icon: "casual" },
-      { id: "installed", label: "tab.installed", icon: "installed" },
-    ],
-  },
-  { label: "nav.group.system", tabs: [{ id: "settings", label: "tab.settings", icon: "settings" }] },
+/** Dock: cinco telas, todas com a mesma altura (a pílula do item ativo desliza entre elas). */
+const TABS: { id: Tab; label: TKey; icon: IconName }[] = [
+  { id: "home", label: "tab.home", icon: "home" },
+  { id: "browse", label: "tab.browse", icon: "catalog" },
+  { id: "casual", label: "tab.casual", icon: "casual" },
+  { id: "installed", label: "tab.installed", icon: "installed" },
+  { id: "settings", label: "tab.settings", icon: "settings" },
 ];
 
 const STORE_KEY = "suny.installPath";
@@ -81,6 +79,12 @@ export function App() {
     setTab(to);
     setSeen((s) => new Set(s).add(to));
     document.querySelector(".sheet")?.scrollTo(0, 0);
+  };
+  // Pedido de outra tela para abrir a ficha de um item no Catálogo.
+  const [openRequest, setOpenRequest] = useState<{ kind: "Mod" | "Sound"; id: number } | undefined>();
+  const openInCatalog = (kind: "Mod" | "Sound", id: number) => {
+    setOpenRequest({ kind, id });
+    go("browse");
   };
   const [path, setPath] = useState<string | undefined>(() => readStored(STORE_KEY));
   const [pathError, setPathError] = useState<string | undefined>();
@@ -194,40 +198,68 @@ export function App() {
 
   const build = inspect.data?.installation.build_id;
 
+  // Destaques: viram o fundo da janela e o herói do Início. Em outras telas o fundo fica mais calmo.
+  const featured = useFeatured(art.data ?? null, "Team Fortress 2");
+  const [heroHover, setHeroHover] = useState(false);
+  const [slideIndex, setSlideIndex] = useSlideshow(featured.slides.length, 9000, heroHover);
+  const slide: Slide | undefined = featured.slides[slideIndex];
+
+  // Holofote: o brilho dos cartões segue o mouse (só atualiza variáveis CSS do cartão sob o cursor).
+  const stageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const move = (e: PointerEvent) => {
+      const target = (e.target as HTMLElement | null)?.closest<HTMLElement>(".glow");
+      if (!target) return;
+      const r = target.getBoundingClientRect();
+      target.style.setProperty("--mx", `${e.clientX - r.left}px`);
+      target.style.setProperty("--my", `${e.clientY - r.top}px`);
+    };
+    el.addEventListener("pointermove", move, { passive: true });
+    return () => el.removeEventListener("pointermove", move);
+  }, []);
+  const activeIdx = TABS.findIndex((x) => x.id === tab);
+
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
+    <div className="app" data-view={tab === "home" ? "home" : "calm"}>
+      <Backdrop src={slide?.src} mode={tab === "home" ? "home" : "calm"} />
+      <aside className="dock" aria-label={t("nav.sections")}>
+        <div className="dock-brand">
           <img src={logo} alt="" width={40} height={40} />
-          <span>
+          <span className="dock-word">
             suny&rsquo;s <b>tf2</b>
             <br />
             supplier
           </span>
         </div>
-        <nav className="tabs" aria-label={t("nav.sections")}>
-          {NAV.map((group) => (
-            <div key={group.label} role="group" aria-label={t(group.label)}>
-              <div className="nav-group" aria-hidden="true">
-                {t(group.label)}
-              </div>
-              {group.tabs.map((x) => (
-                <button key={x.id} className="tab" title={t(x.label)} aria-current={tab === x.id ? "page" : undefined} onClick={() => go(x.id)}>
-                  <Icon name={x.icon} />
-                  <span>{t(x.label)}</span>
-                </button>
-              ))}
-            </div>
+        <nav className="dock-nav" style={{ ["--idx" as string]: Math.max(0, activeIdx) }}>
+          <span className="dock-pill" aria-hidden="true" />
+          {TABS.map((x) => (
+            <button key={x.id} className="dock-item" aria-current={tab === x.id ? "page" : undefined} onClick={() => go(x.id)}>
+              <Icon name={x.icon} />
+              <span className="dock-label">{t(x.label)}</span>
+            </button>
           ))}
         </nav>
-        <div className="side-foot">
-          <div className="chip" title={t("build.title")}>
-            <Icon name="box" />
-            <span>Build {build ?? "—"}</span>
-          </div>
+        <div className="dock-foot" title={t("build.title")}>
+          <Icon name="box" />
+          <span className="dock-label">Build {build ?? "—"}</span>
         </div>
       </aside>
-      <div className="main">
+      <div className="stage" ref={stageRef}>
+        <header className="topbar">
+          <div className="top-title" key={tab}>
+            {t(TABS[Math.max(0, activeIdx)]?.label ?? "tab.home")}
+          </div>
+          <div className="top-right">
+            <span className={`pulse ${running ? "on" : ""}`} title={running ? t("status.open") : t("status.closed")}>
+              <i aria-hidden="true" />
+              {running ? t("status.open") : t("status.closed")}
+            </span>
+            <PlayButton play={{ running, launching, canPlay, error: launchError, onPlay: play }} compact />
+          </div>
+        </header>
       <main className="sheet">
         {showBanner && (
           <div className="update-banner" role="status">
@@ -245,6 +277,7 @@ export function App() {
           </div>
         )}
         {tab === "home" && (
+          <div className="screen">
           <Home
             inspect={inspectView}
             error={pathError}
@@ -263,10 +296,16 @@ export function App() {
             detect={detectResult}
             searching={detecting}
             onSearch={detectNow}
+            featured={featured}
+            slideIndex={slideIndex}
+            onSlide={setSlideIndex}
+            onHeroHover={setHeroHover}
+            onOpenItem={openInCatalog}
           />
+          </div>
         )}
         {seen.has("browse") && (
-          <div hidden={tab !== "browse"}>
+          <div className="screen" hidden={tab !== "browse"}>
             <Browse
               installRoot={inspect.data?.installation.root}
               installed={installed}
@@ -274,10 +313,13 @@ export function App() {
               onChanged={inspect.reload}
               gameRunning={running}
               casual={{ ready: casual.data?.runtime === "ready", unknown: !casual.data, onGo: () => go("casual"), onAdded: casual.reload }}
+              openRequest={openRequest}
+              onOpenHandled={() => setOpenRequest(undefined)}
             />
           </div>
         )}
         {tab === "casual" && (
+          <div className="screen">
           <Casual
             status={casual.data}
             statusError={casual.error}
@@ -289,11 +331,15 @@ export function App() {
             onGoCatalog={() => go("browse")}
             onGoHome={() => go("home")}
           />
+          </div>
         )}
         {tab === "installed" && (
-          <Installed inspect={inspectView} loading={inspect.loading} onGoHome={() => go("home")} onGoCatalog={() => go("browse")} onChanged={inspect.reload} />
+          <div className="screen">
+            <Installed inspect={inspectView} loading={inspect.loading} onGoHome={() => go("home")} onGoCatalog={() => go("browse")} onChanged={inspect.reload} />
+          </div>
         )}
         {tab === "settings" && (
+          <div className="screen">
           <Settings
             inspect={inspectView}
             pathError={pathError}
@@ -319,7 +365,14 @@ export function App() {
             }}
             onOpenUpdate={() => setUpdateOpen(true)}
           />
+          </div>
         )}
+        <footer className="footbar">
+          <span>
+            <T k="footer.left" />
+          </span>
+          <span>{t("footer.right")}</span>
+        </footer>
       </main>
       {updateOpen && update.info?.available && (
         <UpdateDialog
@@ -334,12 +387,6 @@ export function App() {
           }}
         />
       )}
-      <footer className="footbar">
-        <span>
-          <T k="footer.left" />
-        </span>
-        <span>{t("footer.right")}</span>
-      </footer>
       </div>
     </div>
   );

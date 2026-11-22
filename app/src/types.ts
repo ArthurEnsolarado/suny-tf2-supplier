@@ -100,6 +100,9 @@ export interface Summary {
   root_category: Category | null;
   like_count: number;
   view_count: number;
+  /** `show` ou `hide` (conteúdo sensível). */
+  initial_visibility?: string | null;
+  has_content_ratings?: boolean;
 }
 
 export interface FileInfo {

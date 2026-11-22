@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import "@fontsource/lilita-one/latin-400";
+import "@fontsource-variable/bricolage-grotesque";
 import { App } from "./App";
 import { LangProvider } from "./i18n";
 import "./styles.css";

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { call } from "../api";
 import type { Details } from "../types";
-import { Icon } from "../ui";
+import { Icon, Wave } from "../ui";
 
 const cache = new Map<string, Promise<string | null>>();
 
@@ -53,13 +53,13 @@ interface Props {
 export function ModCard({ kind, gbId, title, subtitle, meta, flag, actions }: Props) {
   const thumb = useThumb(kind, gbId);
   return (
-    <li className="mcard">
+    <li className="mcard glow">
       <span className={`card-img ${thumb ? "" : "noimg"}`}>
         {thumb ? (
           <img src={thumb} alt="" loading="lazy" referrerPolicy="no-referrer" />
         ) : (
           <span className="card-empty" aria-hidden="true">
-            <Icon name={kind === "Sound" ? "sound" : "box"} />
+            {kind === "Sound" ? <Wave seed={gbId ?? 1} /> : <Icon name="box" />}
           </span>
         )}
         {flag && <span className="card-flag">{flag}</span>}

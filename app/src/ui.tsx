@@ -23,7 +23,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "./i18n";
 
 /* ---------- ícones: Lucide (ISC), traço uniforme em todo o app ---------- */
@@ -132,5 +132,24 @@ export function ErrorState({ title, message, onRetry }: { title: string; message
         </button>
       )}
     </div>
+  );
+}
+
+/** Forma de onda decorativa para sons sem imagem. Deterministica: o mesmo som tem sempre o mesmo desenho. */
+export function Wave({ seed }: { seed: number }) {
+  const bars = useMemo(() => {
+    let s = (seed >>> 0) || 1;
+    return Array.from({ length: 28 }, (_, i) => {
+      s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+      const envelope = Math.sin((i / 27) * Math.PI);
+      return 0.16 + 0.84 * (((s >>> 8) % 1000) / 1000) * (0.3 + 0.7 * envelope);
+    });
+  }, [seed]);
+  return (
+    <svg className="wave" viewBox="0 0 112 40" aria-hidden="true">
+      {bars.map((h, i) => (
+        <rect key={i} x={i * 4} y={20 - h * 19} width="2.4" height={h * 38} rx="1.2" style={{ ["--i" as string]: i }} />
+      ))}
+    </svg>
   );
 }

@@ -108,6 +108,12 @@ pub struct Summary {
     /// Miniatura (URL do CDN do GameBanana), quando a submissão tem imagem.
     #[serde(default, rename(deserialize = "_aPreviewMedia"), deserialize_with = "thumb_from_media")]
     pub thumb: Option<String>,
+    /// `"show"` quando o GameBanana mostra a imagem sem esconder; `"hide"` para conteúdo sensível.
+    #[serde(default, rename(deserialize = "_sInitialVisibility"))]
+    pub initial_visibility: Option<String>,
+    /// A submissão tem classificação de conteúdo (sensível). A interface nunca usa essas imagens como fundo.
+    #[serde(default, rename(deserialize = "_bHasContentRatings"))]
+    pub has_content_ratings: bool,
 }
 
 /// Só aceitamos imagens do CDN do próprio GameBanana (a interface carrega essas URLs direto).
@@ -630,6 +636,18 @@ mod tests {
             Err(Error::GameBanana { code, .. }) => assert_eq!(code, "INPUT_ERRORS"),
             other => panic!("esperava erro do GameBanana, veio {other:?}"),
         }
+    }
+
+    #[test]
+    fn sensitive_submissions_are_flagged_so_the_ui_never_uses_them_as_a_backdrop() {
+        let safe: Summary = serde_json::from_str(r#"{"_idRow":1,"_sName":"a","_sProfileUrl":"u","_sInitialVisibility":"show"}"#).unwrap();
+        assert_eq!(safe.initial_visibility.as_deref(), Some("show"));
+        assert!(!safe.has_content_ratings);
+        let hidden: Summary = serde_json::from_str(r#"{"_idRow":2,"_sName":"b","_sProfileUrl":"u","_sInitialVisibility":"hide","_bHasContentRatings":true}"#).unwrap();
+        assert_eq!(hidden.initial_visibility.as_deref(), Some("hide"));
+        assert!(hidden.has_content_ratings);
+        let plain: Summary = serde_json::from_str(r#"{"_idRow":3,"_sName":"c","_sProfileUrl":"u"}"#).unwrap();
+        assert!(plain.initial_visibility.is_none() && !plain.has_content_ratings, "campos ausentes não quebram a leitura");
     }
 
     #[test]

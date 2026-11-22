@@ -3,7 +3,7 @@ import { call } from "../api";
 import { fmtBytes, fmtDate, fmtInt } from "../format";
 import { useI18n, type TKey } from "../i18n";
 import type { Category, Details, GameIcons, Kind, Page, Sort, Summary } from "../types";
-import { Badge, ErrorState, Icon, useAsync } from "../ui";
+import { Badge, ErrorState, Icon, useAsync, Wave } from "../ui";
 import { CatGlyph } from "../catIcons";
 import { useSoundPreview } from "../useSoundPreview";
 import { Analyzer, AUTO_ANALYZE_MAX } from "./Analyzer";
@@ -38,6 +38,9 @@ interface BrowseProps {
   gameRunning: boolean;
   /** Casual Preloader dentro do app (aba Casual). */
   casual: CasualLink;
+  /** Pedido de outra tela para abrir a ficha de um item. */
+  openRequest?: { kind: Kind; id: number };
+  onOpenHandled: () => void;
 }
 
 /** "The Demoman" → "demoman": chave do ícone de classe, ou `undefined` se não for uma classe. */
@@ -92,7 +95,7 @@ function useInfinite(key: string, fetchPage: (page: number) => Promise<Page<Summ
   return { ...s, more, retry };
 }
 
-export function Browse({ installRoot, installed, icons, onChanged, gameRunning, casual }: BrowseProps) {
+export function Browse({ installRoot, installed, icons, onChanged, gameRunning, casual, openRequest, onOpenHandled }: BrowseProps) {
   const { t, tc } = useI18n();
   const sound = useSoundPreview();
   const [kind, setKind] = useState<Kind>("Mod");
@@ -102,6 +105,12 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<{ kind: Kind; id: number } | undefined>();
+  // Outra tela (o Início) pediu para abrir a ficha de um item.
+  useEffect(() => {
+    if (!openRequest) return;
+    setOpen(openRequest);
+    onOpenHandled();
+  }, [openRequest, onOpenHandled]);
 
   const key = JSON.stringify([kind, sort, category ?? null, search]);
   const list = useInfinite(key, (page) =>
@@ -220,13 +229,13 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
                     ))
                   : list.items.map((r) => (
                       <li key={r.id} className="cardwrap">
-                        <button className="card" onClick={() => setOpen({ kind, id: r.id })} aria-label={t("browse.open", { name: r.name })}>
+                        <button className="card glow" onClick={() => setOpen({ kind, id: r.id })} aria-label={t("browse.open", { name: r.name })}>
                           <span className={`card-img ${r.thumb ? "" : "noimg"}`}>
                             {r.thumb ? (
                               <img src={r.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" />
                             ) : (
                               <span className="card-empty" aria-hidden="true">
-                                <Icon name={kind === "Sound" ? "sound" : "box"} />
+                                {kind === "Sound" ? <Wave seed={r.id} /> : <Icon name="box" />}
                               </span>
                             )}
                             {installed.has(`${kind}:${r.id}`) && (
@@ -237,13 +246,15 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
                               </span>
                             )}
                           </span>
-                          <span className="card-name">
-                            <span className="clamp">{r.name}</span>
-                          </span>
-                          <span className="card-author">{r.submitter?.name ?? "—"}</span>
-                          <span className="card-foot">
-                            <span className="tag">{r.root_category?.name ?? "—"}</span>
-                            <span className="likes">♥ {fmtInt(r.like_count)}</span>
+                          <span className="card-body">
+                            <span className="card-name">
+                              <span className="clamp">{r.name}</span>
+                            </span>
+                            <span className="card-author">{r.submitter?.name ?? "—"}</span>
+                            <span className="card-foot">
+                              <span className="tag">{r.root_category?.name ?? "—"}</span>
+                              <span className="likes">♥ {fmtInt(r.like_count)}</span>
+                            </span>
                           </span>
                         </button>
                         {kind === "Sound" && (

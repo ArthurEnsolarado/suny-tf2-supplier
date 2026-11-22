@@ -12,13 +12,13 @@ export interface PlayState {
 }
 
 /** Botão de jogar, no cartão do Início. Fica indisponível enquanto o jogo abre e enquanto ele está aberto. */
-export function PlayButton({ play }: { play: PlayState }) {
+export function PlayButton({ play, compact }: { play: PlayState; compact?: boolean }) {
   const { t, tc } = useI18n();
   const { running, launching, canPlay, error, onPlay } = play;
   return (
     <div className="play-wrap">
       <button
-        className={`btn play big ${running ? "is-open" : ""}`}
+        className={`btn play ${compact ? "" : "big"} ${running ? "is-open" : ""}`}
         onClick={onPlay}
         disabled={!canPlay}
         aria-busy={launching}

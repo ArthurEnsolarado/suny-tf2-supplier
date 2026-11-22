@@ -3,6 +3,13 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## Unreleased (design-lab branch)
+
+### Changed
+- **Full redesign, "Sala de projeção".** A floating glass dock replaces the side menu, a glass top bar keeps the game state and the **Play** button always in sight, and the window background is the artwork of the featured GameBanana mods (and your own game's art when available), blurred and drifting slowly with a crossfade every 9 seconds. The Overview now opens with a hero synced to that background, four status tiles and rails of trending mods and sounds you can open straight into the Catalog. Catalog cards are image-first, sounds without a picture get a unique waveform, and cards react to the mouse. Everything is switched off by "reduce motion".
+- Fonts: Bricolage Grotesque for headings and numbers, the system font for text. Lilita One is gone.
+- Items GameBanana flags as sensitive are never used as a background.
+
 ## 0.9.1
 
 ### Fixed
