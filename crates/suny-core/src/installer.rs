@@ -80,12 +80,18 @@ const BAD_CHARS: &[char] = &['<', '>', ':', '"', '|', '?', '*'];
 /// Nome da pasta do mod: legível, sem caracteres proibidos no Windows, e com o id do GameBanana
 /// no fim (ids de mod e de som podem coincidir, por isso `gbm` / `gbs`).
 pub fn slug_for(meta: &ModMeta) -> String {
-    slug_parts(&meta.kind, &meta.name, meta.gb_id)
+    // mod local (escolhido pelo usuário): não tem id do GameBanana, a identidade é o hash do conteúdo (`file_id`)
+    let id = if meta.kind == "Local" { meta.file_id } else { meta.gb_id };
+    slug_parts(&meta.kind, &meta.name, id)
 }
 
-/// Igual a [`slug_for`], só com os três dados que ele usa.
+/// Igual a [`slug_for`], só com os três dados que ele usa. Em `Local`, `gb_id` é o hash do conteúdo.
 pub fn slug_parts(kind: &str, name: &str, gb_id: u64) -> String {
-    let letter = if kind == "Sound" { 's' } else { 'm' };
+    let tag = match kind {
+        "Sound" => format!("gbs{gb_id}"),
+        "Local" => format!("local-{gb_id:08x}"),
+        _ => format!("gbm{gb_id}"),
+    };
     let cleaned: String = name
         .chars()
         .map(|c| if c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.') { c } else { '_' })
@@ -94,7 +100,7 @@ pub fn slug_parts(kind: &str, name: &str, gb_id: u64) -> String {
     let trimmed: String = joined.trim_matches(|c| matches!(c, ' ' | '.' | '_')).chars().take(60).collect();
     let base = trimmed.trim_end_matches(|c| matches!(c, ' ' | '.'));
     let base = if base.is_empty() { "mod" } else { base };
-    format!("{base} (gb{letter}{gb_id})")
+    format!("{base} ({tag})")
 }
 
 /// Um nome que vai virar UMA entrada de `custom` (sem separadores, sem `..`).

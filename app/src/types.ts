@@ -200,6 +200,24 @@ export interface Analysis {
   audio: AudioItem[];
   audio_total: number;
   vanilla_known: boolean;
+  /** Arquivos que moram dentro de .vpk do pacote. */
+  vpk_files: number;
+}
+
+/** Um mod que o usuário já tinha (arquivo, pasta ou .vpk), arrumado pelo app. */
+export interface LocalStaged {
+  id: string;
+  file_name: string;
+  suggested_name: string;
+  /** zip, rar, 7z, vpk, folder ou files. */
+  source: string;
+  moved: { from: string; to: string }[];
+  unplaced: string[];
+}
+
+export interface LocalInspect {
+  staged: LocalStaged;
+  analysis: Analysis;
 }
 
 /* ---------- Casual Preloader dentro do app ---------- */

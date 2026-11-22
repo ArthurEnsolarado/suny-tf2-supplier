@@ -194,7 +194,7 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
                     kind={a.source?.kind ?? null}
                     gbId={a.source?.gb_id ?? null}
                     title={a.source?.name ?? a.name}
-                    subtitle={a.source?.submitter ? t("common.by", { who: a.source.submitter }) : a.source ? undefined : t("casual.list.external")}
+                    subtitle={a.source?.submitter ? t("common.by", { who: a.source.submitter }) : a.source ? (a.source.kind === "Local" ? t("installed.local") : undefined) : t("casual.list.external")}
                     meta={
                       <>
                         {`${t("files", { n: a.file_count })} · ${fmtBytes(a.size_bytes)}`}

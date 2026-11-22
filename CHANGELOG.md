@@ -3,6 +3,16 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## 0.11.0
+
+### Added
+- **Add a mod you already have.** In the *Installed* tab, drop a `.zip`, `.rar`, `.7z`, `.vpk`, a folder or loose files (`.wav`, `.bsp`, ...) onto the window, or use *Choose files* / *Choose folder* / paste a path. The app works out the structure by itself and shows what it understood before it writes anything: the compatibility seal, which classes and parts of the game it changes, and the sounds to listen to.
+  - Wrapping folders (`MyMod/tf/custom/mymod/...`) are peeled off, `.vpk` packages bring their `_000.vpk` data parts along, and junk like `Thumbs.db` is ignored.
+  - Loose files get the right game folder: maps, configs and particles by extension; sounds, textures and models by comparing their name with the game's original files, **only when exactly one original path matches** (a name that exists in two places is left out and listed, never guessed).
+  - It goes through the same install panel as the catalog: Casual or Offline/community (maps never to Casual), with the game open only new items are allowed, executables block everything, and nothing is overwritten.
+  - Your original files are never changed. Installing the same mod again replaces the app's own copy; removing it from *Installed* deletes only what the app created.
+- The Home screen no longer says the app only installs with TF2 closed (that stopped being true in 0.10.0).
+
 ## 0.10.1
 
 ### Fixed

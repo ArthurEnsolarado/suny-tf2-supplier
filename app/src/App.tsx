@@ -5,7 +5,9 @@ import logo from "./assets/logo.png";
 import { Browse } from "./screens/Browse";
 import { Casual } from "./screens/Casual";
 import { Home } from "./screens/Home";
+import { ImportMod } from "./screens/ImportMod";
 import { Installed } from "./screens/Installed";
+import { useFileDrop } from "./useFileDrop";
 import { RestartButton } from "./screens/RestartButton";
 import { Settings } from "./screens/Settings";
 import { UpdateDialog } from "./screens/UpdateDialog";
@@ -194,6 +196,11 @@ export function App() {
 
   const build = inspect.data?.installation.build_id;
 
+  // "Já tenho este mod": arquivos e pastas escolhidos, colados ou soltos na janela abrem a janela de importar.
+  const [importPaths, setImportPaths] = useState<string[] | undefined>();
+  const dropping = useFileDrop((paths) => setImportPaths(paths));
+  const casualLink = { ready: casual.data?.runtime === "ready", unknown: !casual.data, onGo: () => go("casual"), onAdded: casual.reload };
+
   return (
     <div className="app">
       {backdrop && <div className={`backdrop ${backdropBlurred ? "soften" : ""}`} style={{ backgroundImage: `url(${backdrop})` }} aria-hidden="true" />}
@@ -286,7 +293,7 @@ export function App() {
           />
         )}
         {tab === "installed" && (
-          <Installed inspect={inspectView} loading={inspect.loading} onGoHome={() => go("home")} onGoCatalog={() => go("browse")} onChanged={inspect.reload} />
+          <Installed inspect={inspectView} loading={inspect.loading} onGoHome={() => go("home")} onGoCatalog={() => go("browse")} onChanged={inspect.reload} onImport={setImportPaths} />
         )}
         {tab === "settings" && (
           <Settings
@@ -316,6 +323,22 @@ export function App() {
           />
         )}
       </main>
+      {importPaths && (
+        <ImportMod
+          paths={importPaths}
+          installRoot={inspect.data?.installation.root}
+          gameRunning={running}
+          icons={icons.data?.icons ?? {}}
+          casual={casualLink}
+          onClose={() => setImportPaths(undefined)}
+          onChanged={inspect.reload}
+        />
+      )}
+      {dropping && (
+        <div className="drop-veil" aria-hidden="true">
+          <p>{t("import.drop")}</p>
+        </div>
+      )}
       {updateOpen && update.info?.available && (
         <UpdateDialog
           info={update.info}

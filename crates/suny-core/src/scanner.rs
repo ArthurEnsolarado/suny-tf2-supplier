@@ -106,6 +106,20 @@ impl VanillaIndex {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+    /// Caminhos originais agrupados pelo nome do arquivo, só para os nomes pedidos (minúsculos). Uma volta no índice.
+    pub fn paths_named(&self, names: &HashSet<String>) -> std::collections::HashMap<String, Vec<String>> {
+        let mut out: std::collections::HashMap<String, Vec<String>> = Default::default();
+        for p in &self.0 {
+            let base = p.rsplit('/').next().unwrap_or(p);
+            if names.contains(base) {
+                out.entry(base.to_string()).or_default().push(p.clone());
+            }
+        }
+        for v in out.values_mut() {
+            v.sort();
+        }
+        out
+    }
 }
 
 fn norm(p: &str) -> String {

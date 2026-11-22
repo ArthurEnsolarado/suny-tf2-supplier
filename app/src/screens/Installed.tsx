@@ -14,6 +14,8 @@ interface Props {
   onGoCatalog: () => void;
   /** Chamado depois de remover, para a lista se atualizar. */
   onChanged: () => void;
+  /** O usuário escolheu (ou colou) arquivos ou uma pasta de um mod que já tem. */
+  onImport: (paths: string[]) => void;
 }
 
 /** Um mod que ocupa vários itens em `custom` (um pacote com dezenas de `.vpk`, por exemplo) vira UM cartão. */
@@ -31,13 +33,22 @@ const stemOf = (name: string): string =>
     .replace(/([\s._-]+([a-z]|v?\d+|\(\d+\))|\(\d+\)|\d+)$/i, "")
     .trim();
 
-export function Installed({ inspect, loading, onGoHome, onGoCatalog, onChanged }: Props) {
+export function Installed({ inspect, loading, onGoHome, onGoCatalog, onChanged, onImport }: Props) {
   const { t, T, tc } = useI18n();
   const [showAllConflicts, setShowAllConflicts] = useState(false);
   const [confirm, setConfirm] = useState<string | undefined>();
   const [busy, setBusy] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [openGroup, setOpenGroup] = useState<string | undefined>();
+  const [pasted, setPasted] = useState("");
+  const [pickError, setPickError] = useState<string | undefined>();
+  const pick = (folder: boolean) => {
+    setPickError(undefined);
+    call<{ paths: string[] }>("pick_files", { folder }).then(
+      (r) => r.paths.length > 0 && onImport(r.paths),
+      (e: unknown) => setPickError(e instanceof Error ? e.message : String(e)),
+    );
+  };
 
   const roleLabel: Record<Role, string> = {
     mod: t("installed.role.mod"),
@@ -185,6 +196,43 @@ export function Installed({ inspect, loading, onGoHome, onGoCatalog, onChanged }
         )}
       </div>
 
+      <section aria-labelledby="h-own" className="own">
+        <h2 id="h-own">{t("import.entry.title")}</h2>
+        <p className="muted">{t("import.entry.body")}</p>
+        <div className="row">
+          <button className="btn primary" onClick={() => pick(false)}>
+            {t("import.entry.files")}
+          </button>
+          <button className="btn" onClick={() => pick(true)}>
+            {t("import.entry.folder")}
+          </button>
+        </div>
+        <form
+          className="row own-paste"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const v = pasted.trim().replace(/^"(.*)"$/, "$1");
+            if (v) {
+              onImport([v]);
+              setPasted("");
+            }
+          }}
+        >
+          <label className="field">
+            <span>{t("import.entry.paste")}</span>
+            <input className="blank" value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="C:\Users\…\meu_mod.zip" spellCheck={false} />
+          </label>
+          <button className="btn flat" type="submit" disabled={!pasted.trim()}>
+            {t("import.entry.use")}
+          </button>
+        </form>
+        {pickError && (
+          <p className="muted small" role="alert">
+            {tc(pickError)}
+          </p>
+        )}
+      </section>
+
       {error && (
         <div className="state error" role="alert">
           <h2>{t("installed.remove.failed")}</h2>
@@ -220,7 +268,7 @@ export function Installed({ inspect, loading, onGoHome, onGoCatalog, onChanged }
                   kind={m.kind}
                   gbId={m.gb_id}
                   title={m.name}
-                  subtitle={m.submitter ? t("common.by", { who: m.submitter }) : undefined}
+                  subtitle={m.submitter ? t("common.by", { who: m.submitter }) : m.kind === "Local" ? t("installed.local") : undefined}
                   meta={many ? groupMeta(g, m.version ? ` · v${m.version}` : "") : metaOf(g.entries[0]!, m.version ? ` · v${m.version}` : "")}
                   flag={
                     <Badge tone="ok" small>

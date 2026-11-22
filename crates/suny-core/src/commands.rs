@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 use crate::gamebanana::{Client, Kind, Query, Sort};
 use crate::steam::Installation;
 use crate::installer::{self, ModMeta};
-use crate::{analysis, archive, art, casual, contents, gameicons, library, steam, system, update, vanilla, Error};
+use crate::{analysis, archive, art, casual, contents, gameicons, library, localmod, steam, system, update, vanilla, Error};
 
 #[derive(Deserialize)]
 struct ListArgs {
@@ -48,6 +48,35 @@ struct InstallArgs {
     kind: Kind,
     id: u64,
     file_id: u64,
+}
+
+#[derive(Deserialize)]
+struct LocalInspectArgs {
+    /// Arquivos ou pastas que o usuário escolheu (ou soltou na janela).
+    paths: Vec<String>,
+    /// Pasta do TF2, para comparar os nomes com os arquivos originais. Opcional.
+    path: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct LocalInstallArgs {
+    paths: Vec<String>,
+    path: Option<String>,
+    name: String,
+    /// `custom` (tf/custom) ou `casual` (lista do Casual Preloader).
+    dest: String,
+}
+
+#[derive(Deserialize)]
+struct LocalPreviewArgs {
+    id: String,
+    entry: String,
+}
+
+#[derive(Deserialize)]
+struct PickFilesArgs {
+    /// `true` escolhe uma pasta; `false` escolhe arquivos.
+    folder: bool,
 }
 
 #[derive(Deserialize)]
@@ -519,6 +548,141 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
                 .map_err(|e| e.to_string())?;
             let _ = std::fs::remove_file(&staging); // o zip temporário nunca fica no computador
             out(outcome.map_err(|e| e.to_string())?)
+        }
+
+        // ---- Mod que o usuário já tem (arquivo, pasta ou .vpk): o app descobre a estrutura e arruma como um mod do catálogo.
+        // `local_inspect` só lê e monta um zip temporário; nada vai para o jogo.
+        "local_inspect" => {
+            let p: LocalInspectArgs = args(a)?;
+            let tf_dir = p.path.and_then(|s| resolve(&s).ok()).map(|i| i.tf_dir);
+            let paths: Vec<PathBuf> = p.paths.iter().map(PathBuf::from).collect();
+            tokio::task::spawn_blocking(move || {
+                let index = tf_dir.as_deref().map(vanilla::index_for);
+                let cache = analysis_cache_dir();
+                let staged = localmod::stage(&paths, &cache, index.as_deref()).map_err(|e| e.to_string())?;
+                prune_cache(&cache, staged.zip_path());
+                let analysis = analysis::analyze_zip(staged.zip_path(), index.as_deref()).map_err(|e| e.to_string())?;
+                Ok(json!({ "staged": staged, "analysis": analysis }))
+            })
+            .await
+            .map_err(|e| e.to_string())?
+        }
+
+        // Ouvir um som do mod local já arrumado (o zip temporário criado por `local_inspect`).
+        "local_preview_audio" => {
+            let p: LocalPreviewArgs = args(a)?;
+            let zip = localmod::staged_zip(&analysis_cache_dir(), &p.id).ok_or_else(|| "id inválido".to_string())?;
+            if !zip.is_file() {
+                return Err("Escolha o mod de novo para ouvir os sons.".into());
+            }
+            let (mime, bytes) = tokio::task::spawn_blocking(move || analysis::read_audio(&zip, &p.entry))
+                .await
+                .map_err(|e| e.to_string())?
+                .map_err(|e| e.to_string())?;
+            Ok(json!({ "mime": mime, "data_url": format!("data:{mime};base64,{}", STANDARD.encode(bytes)) }))
+        }
+
+        // Instala o mod local em tf/custom ou o coloca na lista do casual. Mesmas regras do catálogo: com o jogo aberto
+        // só entra item NOVO; mapa nunca vai para o casual.
+        "local_install" => {
+            let p: LocalInstallArgs = args(a)?;
+            if p.dest != "custom" && p.dest != "casual" {
+                return Err("argumentos inválidos: dest".into());
+            }
+            let found = p.path.as_deref().and_then(|s| resolve(s).ok());
+            let tf_dir = found.as_ref().map(|i| i.tf_dir.clone());
+            let paths: Vec<PathBuf> = p.paths.iter().map(PathBuf::from).collect();
+            let staged = tokio::task::spawn_blocking(move || {
+                let index = tf_dir.as_deref().map(vanilla::index_for);
+                let cache = analysis_cache_dir();
+                let s = localmod::stage(&paths, &cache, index.as_deref());
+                if let Ok(s) = &s {
+                    prune_cache(&cache, s.zip_path());
+                }
+                s
+            })
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
+            let meta = localmod::meta_for(&staged, &p.name);
+
+            if p.dest == "custom" {
+                let install = found.ok_or_else(|| "Escolha a pasta do TF2 primeiro (aba Início).".to_string())?;
+                let game_open = {
+                    let root = install.root.clone();
+                    tokio::task::spawn_blocking(move || system::game_running(Some(&root))).await.map_err(|e| e.to_string())?
+                };
+                let custom = install.custom_dir();
+                if game_open && custom.join(installer::slug_for(&meta)).exists() {
+                    return Err(Error::GameRunning.to_string());
+                }
+                let zip_path = staged.zip.clone();
+                let outcome = tokio::task::spawn_blocking(move || installer::install_zip(&zip_path, &custom, meta))
+                    .await
+                    .map_err(|e| e.to_string())?;
+                return out(outcome.map_err(|e| e.to_string())?);
+            }
+
+            // casual
+            let l = casual::Layout::default();
+            if casual::runtime(&l) != casual::Runtime::Ready {
+                return Err("Configure o Casual Preloader primeiro, na aba Casual.".into());
+            }
+            if let Some(cur) = casual::job_view().filter(|j| j.state == "running") {
+                return Err(format!("Já existe uma operação em andamento: {}. Espere terminar.", cur.title));
+            }
+            let zip_for_scan = staged.zip.clone();
+            let has_map = tokio::task::spawn_blocking(move || -> Result<bool, String> {
+                let names = crate::scanner::zip_paths(std::fs::File::open(&zip_for_scan).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+                Ok(names.iter().any(|n| n.to_ascii_lowercase().ends_with(".bsp")))
+            })
+            .await
+            .map_err(|e| e.to_string())??;
+            if has_map {
+                return Err("Mapas (.bsp) não funcionam no casual: o Casual Preloader não carrega mapas. Instale em tf/custom.".into());
+            }
+            let source = casual::AddonSource {
+                kind: meta.kind.clone(),
+                gb_id: 0,
+                file_id: meta.file_id,
+                file_name: meta.file_name.clone(),
+                name: meta.name.clone(),
+                version: None,
+                submitter: None,
+                profile_url: String::new(),
+                md5: None,
+                added_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
+            };
+            let title = format!("Adicionar \"{}\" ao casual", meta.name);
+            let addon_name = installer::slug_parts("Local", &meta.name, meta.file_id);
+            let zip = staged.zip.clone();
+            out(casual::start_job("add", &title, move |rep| casual::add_zip(l, zip, addon_name, source, rep))?)
+        }
+
+        // Janela nativa para escolher arquivos de mod ou uma pasta. Devolve `paths: []` se o usuário cancelar.
+        "pick_files" => {
+            let p: PickFilesArgs = args(a)?;
+            tokio::task::spawn_blocking(move || {
+                #[cfg(windows)]
+                {
+                    let dlg = rfd::FileDialog::new().set_title("Mod");
+                    let paths: Vec<PathBuf> = if p.folder {
+                        dlg.pick_folder().into_iter().collect()
+                    } else {
+                        dlg.add_filter("Mods (.zip .rar .7z .vpk .wav .mp3 .bsp ...)", &["zip", "rar", "7z", "vpk", "wav", "mp3", "ogg", "vtf", "vmt", "mdl", "bsp", "cfg", "pcf"])
+                            .pick_files()
+                            .unwrap_or_default()
+                    };
+                    Ok::<Value, String>(json!({ "paths": paths }))
+                }
+                #[cfg(not(windows))]
+                {
+                    let _ = p;
+                    Err::<Value, String>("escolher arquivos pela janela só existe no Windows".to_string())
+                }
+            })
+            .await
+            .map_err(|e| e.to_string())?
         }
 
         "uninstall_mod" => {

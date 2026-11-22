@@ -13,6 +13,7 @@ pub mod gamebanana;
 pub mod gameicons;
 pub mod installer;
 pub mod library;
+pub mod localmod;
 pub mod logs;
 pub mod replaces;
 pub mod remotezip;

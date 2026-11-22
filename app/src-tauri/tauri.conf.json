@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Suny TF2 Supplier",
-  "version": "0.10.1",
+  "version": "0.11.0",
   "identifier": "dev.suny.tf2supplier",
   "build": {
     "beforeDevCommand": "npm run dev",

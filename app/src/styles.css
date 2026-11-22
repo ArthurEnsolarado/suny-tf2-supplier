@@ -598,3 +598,19 @@ a { color: var(--accent); }
 @media (max-width: 1100px) {
   .modal-media, .modal-side { flex: none; }
 }
+
+/* "Já tenho um mod": porta de entrada na aba Instalado, janela de importar e aviso ao soltar arquivos na janela */
+.own .row { margin-top: 12px; }
+.own-paste { align-items: flex-end; }
+.own-paste .field { flex: 1 1 320px; }
+.own-paste input { width: 100%; }
+.import-body { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+.import-source { margin: 0 0 6px; }
+.organized .moved { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.organized .moved code { overflow-wrap: anywhere; }
+.organized .note { margin-top: 12px; }
+.import-name input { width: 100%; }
+.drop-veil { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: oklch(0.14 0.02 55 / 0.82); border: 4px dashed var(--tf-orange); pointer-events: none; }
+.drop-veil p { font-family: var(--display); font-size: clamp(32px, 5vw, 56px); text-transform: uppercase; color: var(--cream); margin: 0; }
+.modal:has(.import-body) { width: min(1180px, 100%); }
+@media (max-width: 1100px) { .import-body { grid-template-columns: minmax(0, 1fr); } }
