@@ -7,8 +7,9 @@ import { Badge, ErrorState, Icon, useAsync, Wave } from "../ui";
 import { CatGlyph } from "../catIcons";
 import { useSoundPreview } from "../useSoundPreview";
 import { Analyzer, AUTO_ANALYZE_MAX } from "./Analyzer";
-import { CasualAddBox } from "./CasualAddBox";
-import { InstallBox, SUPPORTED } from "./InstallBox";
+import { InstallPanel, type CasualLink } from "./InstallPanel";
+import { SUPPORTED } from "./InstallBox";
+import { Modal } from "./Modal";
 
 /** Itens pedidos por vez. A grade tem 5 colunas, então 25 fecha 5 linhas. */
 const PER_PAGE = 25;
@@ -19,13 +20,6 @@ const SORTS: { value: Sort; label: TKey }[] = [
   { value: "Newest", label: "browse.sort.newest" },
 ];
 
-export interface CasualLink {
-  ready: boolean;
-  unknown: boolean;
-  onGo: () => void;
-  onAdded: () => void;
-}
-
 interface BrowseProps {
   /** Raiz do TF2 escolhida (ou nada, se ainda não há instalação). */
   installRoot: string | undefined;
@@ -33,13 +27,15 @@ interface BrowseProps {
   installed: Set<string>;
   /** Ícones de classe lidos do jogo (vazio se o jogo não foi encontrado). */
   icons: GameIcons["icons"];
+  /** Retratos das classes (o rosto dos personagens), lidos do jogo. */
+  portraits: GameIcons["icons"];
   onChanged: () => void;
   /** O TF2 está aberto agora. */
   gameRunning: boolean;
   /** Casual Preloader dentro do app (aba Casual). */
   casual: CasualLink;
   /** Pedido de outra tela para abrir a ficha de um item. */
-  openRequest?: { kind: Kind; id: number };
+  openRequest?: { kind: Kind; id: number; root?: string };
   onOpenHandled: () => void;
 }
 
@@ -47,6 +43,67 @@ interface BrowseProps {
 function classKey(name: string): string | undefined {
   const k = name.toLowerCase().replace(/^the\s+/, "").trim();
   return ["scout", "soldier", "pyro", "demoman", "heavy", "engineer", "medic", "sniper", "spy"].includes(k) ? k : undefined;
+}
+
+const CLASS_ORDER = ["scout", "soldier", "pyro", "demoman", "heavy", "engineer", "medic", "sniper", "spy"] as const;
+const CLASS_LABEL: Record<string, string> = { scout: "Scout", soldier: "Soldier", pyro: "Pyro", demoman: "Demoman", heavy: "Heavy", engineer: "Engineer", medic: "Medic", sniper: "Sniper", spy: "Spy" };
+
+type ClassCats = Record<string, { id: number; path: string[] }>;
+const classCatsCache = new Map<Kind, Promise<ClassCats>>();
+
+/** Acha, no GameBanana, a categoria de cada classe: nos mods `Skins > The Scout`, nos sons `Character Voice > Scout Voice`. */
+function loadClassCats(kind: Kind): Promise<ClassCats> {
+  let p = classCatsCache.get(kind);
+  if (!p) {
+    const parentName = kind === "Mod" ? "skins" : "character voice";
+    p = call<Category[]>("gb_categories", { kind })
+      .then(async (roots) => {
+        const parent = roots.find((c) => c.name.toLowerCase() === parentName);
+        if (!parent) return {};
+        const kids = await call<Category[]>("gb_categories", { kind, parent: parent.id });
+        const out: ClassCats = {};
+        for (const k of kids) {
+          const key = classKey(k.name.replace(/\s+voice$/i, ""));
+          if (key) out[key] = { id: k.id, path: [parent.name, k.name] };
+        }
+        return out;
+      })
+      .catch(() => {
+        classCatsCache.delete(kind);
+        return {};
+      });
+    classCatsCache.set(kind, p);
+  }
+  return p;
+}
+
+/** Fileira de classes no topo: o rosto de cada personagem (do próprio jogo). Atalho para a categoria da classe. */
+function ClassRow({ kind, portraits, selected, onPick }: { kind: Kind; portraits: GameIcons["icons"]; selected: number | undefined; onPick: (id: number | undefined, path: string[]) => void }) {
+  const { t } = useI18n();
+  const cats = useAsync<ClassCats>(() => loadClassCats(kind), [kind]);
+  const have = CLASS_ORDER.filter((k) => cats.data?.[k]);
+  if (have.length === 0) return null;
+  return (
+    <div className="classes" role="group" aria-label={t("browse.classes")}>
+      {have.map((k) => {
+        const c = cats.data![k]!;
+        const on = selected === c.id;
+        return (
+          <button
+            key={k}
+            type="button"
+            className={`class-chip ${on ? "on" : ""}`}
+            aria-pressed={on}
+            title={t(kind === "Mod" ? "browse.class.mod" : "browse.class.sound", { name: CLASS_LABEL[k] ?? k })}
+            onClick={() => (on ? onPick(undefined, []) : onPick(c.id, c.path))}
+          >
+            {portraits[k] ? <img src={portraits[k]} alt="" /> : <span className="class-face" aria-hidden="true">{(CLASS_LABEL[k] ?? k).slice(0, 1)}</span>}
+            <span>{CLASS_LABEL[k] ?? k}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 /** Lista que cresce conforme se rola. Trocar `key` zera tudo; respostas atrasadas de uma busca antiga são descartadas. */
@@ -95,7 +152,7 @@ function useInfinite(key: string, fetchPage: (page: number) => Promise<Page<Summ
   return { ...s, more, retry };
 }
 
-export function Browse({ installRoot, installed, icons, onChanged, gameRunning, casual, openRequest, onOpenHandled }: BrowseProps) {
+export function Browse({ installRoot, installed, icons, portraits, onChanged, gameRunning, casual, openRequest, onOpenHandled }: BrowseProps) {
   const { t, tc } = useI18n();
   const sound = useSoundPreview();
   const [kind, setKind] = useState<Kind>("Mod");
@@ -104,7 +161,7 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
   const [catPath, setCatPath] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
-  const [open, setOpen] = useState<{ kind: Kind; id: number } | undefined>();
+  const [open, setOpen] = useState<{ kind: Kind; id: number; root?: string } | undefined>();
   // Outra tela (o Início) pediu para abrir a ficha de um item.
   useEffect(() => {
     if (!openRequest) return;
@@ -148,6 +205,16 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
         </div>
       </div>
 
+      <ClassRow
+        kind={kind}
+        portraits={portraits}
+        selected={category}
+        onPick={(id, path) => {
+          setCategory(id);
+          setCatPath(path);
+        }}
+      />
+
       <form
         className="row"
         onSubmit={(e) => {
@@ -169,7 +236,7 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
         </label>
         <label className="field">
           <span>{t("browse.sort")}</span>
-          <select className="blank" value={sort} onChange={(e) => setSort(e.target.value as Sort)} disabled={searching}>
+          <select className="blank" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
             {SORTS.map((s) => (
               <option key={s.value} value={s.value}>
                 {t(s.label)}
@@ -194,14 +261,12 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
           </button>
         )}
       </form>
-      {searching && <p className="muted">{t("browse.search.note")}</p>}
 
       <audio ref={sound.audioRef} onEnded={sound.onEnded} />
       <div className="browse">
         <CategoryTree
           kind={kind}
           selected={category}
-          disabled={searching}
           icons={icons}
           onSelect={(id, path) => {
             setCategory(id);
@@ -210,7 +275,7 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
         />
 
         <section className="results" aria-label={t("browse.results")}>
-          {catPath.length > 0 && !searching && (
+          {catPath.length > 0 && (
             <p className="crumb">
               <span className="muted">{t("browse.category")}</span> <b>{catPath.join(" › ")}</b>
             </p>
@@ -229,7 +294,7 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
                     ))
                   : list.items.map((r) => (
                       <li key={r.id} className="cardwrap">
-                        <button className="card glow" onClick={() => setOpen({ kind, id: r.id })} aria-label={t("browse.open", { name: r.name })}>
+                        <button className="card glow" onClick={() => setOpen({ kind, id: r.id, root: r.root_category?.name })} aria-label={t("browse.open", { name: r.name })}>
                           <span className={`card-img ${r.thumb ? "" : "noimg"}`}>
                             {r.thumb ? (
                               <img src={r.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" />
@@ -267,11 +332,6 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
                             <Icon name={sound.cur?.id === r.id ? (sound.cur.state === "loading" ? "spinner" : sound.cur.state === "playing" ? "pause" : "x") : "play"} filled={!(sound.cur?.id === r.id)} />
                           </button>
                         )}
-                        {kind === "Sound" && sound.cur?.id === r.id && sound.cur.state === "error" && (
-                          <span className="card-play-msg" role="alert">
-                            {t("card.previewFailed", { msg: tc(sound.cur.msg ?? "") })}
-                          </span>
-                        )}
                         {kind === "Sound" && sound.cur?.id === r.id && sound.cur.state === "playing" && (
                           <span className="card-play-msg" role="status">
                             {sound.cur.name}
@@ -307,9 +367,19 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
         </section>
       </div>
 
+      {kind === "Sound" && sound.cur?.state === "error" && (
+        <div className="toast" role="alert">
+          <Icon name="x" />
+          <span>{t("card.previewFailed", { msg: tc(sound.cur.msg ?? "") })}</span>
+          <button className="btn flat mini" onClick={sound.stop}>
+            {t("common.close")}
+          </button>
+        </div>
+      )}
+
       {open && (
         <Modal onClose={() => setOpen(undefined)} labelledBy="ficha-titulo">
-          <Ficha kind={open.kind} id={open.id} installRoot={installRoot} icons={icons} onChanged={onChanged} gameRunning={gameRunning} casual={casual} onClose={() => setOpen(undefined)} />
+          <Ficha kind={open.kind} id={open.id} root={open.root} installRoot={installRoot} icons={icons} onChanged={onChanged} gameRunning={gameRunning} casual={casual} onClose={() => setOpen(undefined)} />
         </Modal>
       )}
     </>
@@ -320,13 +390,11 @@ export function Browse({ installRoot, installed, icons, onChanged, gameRunning, 
 function CategoryTree({
   kind,
   selected,
-  disabled,
   icons,
   onSelect,
 }: {
   kind: Kind;
   selected: number | undefined;
-  disabled: boolean;
   icons: GameIcons["icons"];
   onSelect: (id: number | undefined, path: string[]) => void;
 }) {
@@ -361,7 +429,8 @@ function CategoryTree({
   const node = (c: Category, depth: number, path: string[]): ReactNode => {
     const myPath = [...path, c.name];
     const children = kids[c.id];
-    const isLeaf = Array.isArray(children) && children.length === 0;
+    // Só mostra a seta quando a API diz que há subcategorias (antes todas tinham seta, e muitas abriam vazias).
+    const isLeaf = c.child_count === 0 || (Array.isArray(children) && children.length === 0);
     const isOpen = expanded.has(c.id);
     const ck = classKey(c.name);
     const icon = ck ? icons[ck] : undefined;
@@ -373,12 +442,12 @@ function CategoryTree({
             onClick={() => toggle(c)}
             aria-expanded={isOpen}
             aria-label={`${isOpen ? t("browse.collapse") : t("browse.expand")} ${c.name}`}
-            disabled={disabled || isLeaf}
+            disabled={isLeaf}
             tabIndex={isLeaf ? -1 : 0}
           >
             {isLeaf ? "" : isOpen ? "▾" : "▸"}
           </button>
-          <button className="cat" aria-pressed={selected === c.id} disabled={disabled} onClick={() => onSelect(c.id, myPath)}>
+          <button className="cat" aria-pressed={selected === c.id} onClick={() => onSelect(c.id, myPath)}>
             {icon ? <img className="cat-icon" src={icon} alt="" /> : <CatGlyph name={c.name} />}
             <span>{ck ? c.name.replace(/^the\s+/i, "") : c.name}</span>
             <span className="count">{fmtInt(c.item_count)}</span>
@@ -402,7 +471,7 @@ function CategoryTree({
         <li>
           <div className="cat-row">
             <span className="chev" aria-hidden="true" />
-            <button className="cat" aria-pressed={selected === undefined} disabled={disabled} onClick={() => onSelect(undefined, [])}>
+            <button className="cat" aria-pressed={selected === undefined} onClick={() => onSelect(undefined, [])}>
               {icons.all && <img className="cat-icon" src={icons.all} alt="" />}
               <span>{t("browse.all")}</span>
             </button>
@@ -418,58 +487,10 @@ function CategoryTree({
 
 const sortCats = (list: Category[]): Category[] => [...new Map(list.map((c) => [c.id, c])).values()].sort((a, b) => a.name.localeCompare(b.name));
 
-/** Janela sobre a tela: Esc fecha, o foco fica dentro e volta ao card ao fechar. */
-function Modal({ children, onClose, labelledBy }: { children: ReactNode; onClose: () => void; labelledBy: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    ref.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (document.querySelector(".lightbox")) return; // o zoom da imagem trata o próprio Esc
-        onClose();
-        return;
-      }
-      if (e.key !== "Tab" || !ref.current) return;
-      const items = [...ref.current.querySelectorAll<HTMLElement>('button, [href], input, select, [tabindex]:not([tabindex="-1"])')].filter(
-        (el) => !el.hasAttribute("disabled"),
-      );
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (!first || !last) return;
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      previous?.focus();
-    };
-  }, [onClose]);
-
-  return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby={labelledBy} tabIndex={-1} ref={ref}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 function Ficha({
   kind,
   id,
+  root,
   installRoot,
   icons,
   onChanged,
@@ -479,6 +500,8 @@ function Ficha({
 }: {
   kind: Kind;
   id: number;
+  /** Categoria raiz do item (vem do cartão). `Maps` = mapa. */
+  root?: string;
   installRoot: string | undefined;
   icons: GameIcons["icons"];
   onChanged: () => void;
@@ -493,6 +516,7 @@ function Ficha({
   const [zoom, setZoom] = useState(false);
   const [moreDesc, setMoreDesc] = useState(false);
 
+  const isMap = kind === "Mod" && (root ?? "").toLowerCase() === "maps";
   const imgs = d.data?.images ?? [];
   const count = imgs.length;
   const go = useCallback((delta: number) => setIdx((i) => (count ? (i + delta + count) % count : 0)), [count]);
@@ -613,6 +637,35 @@ function Ficha({
                   <b>{fmtInt(d.data.view_count)}</b> {t("ficha.views")}
                 </span>
               </div>
+              <h3>{t("ficha.files", { n: d.data.files.length })}</h3>
+              {d.data.files.length === 0 && <p className="muted">{t("ficha.noFiles")}</p>}
+              {d.data.files.map((f) => {
+                const exe = f.analysis_warnings && "contains_exe" in f.analysis_warnings;
+                return (
+                  <div className="file" key={f.id}>
+                    <span className="legend">{f.file_name}</span>
+                    <b>{fmtBytes(f.size)}</b>
+                    <div>
+                      {t("ficha.antivirus")} <b>{f.av_result ?? t("ficha.noResult")}</b>
+                    </div>
+                    {exe && (
+                      <p>
+                        <Badge tone="block" small>
+                          {t("ficha.hasExe")}
+                        </Badge>
+                      </p>
+                    )}
+                    {f.md5 && (
+                      <div>
+                        <code>MD5 {f.md5}</code>
+                      </div>
+                    )}
+                    <Analyzer key={`a${f.id}`} installRoot={installRoot} kind={kind} modId={id} file={f} icons={icons} hideSounds={soundFile?.id === f.id} />
+                    <InstallPanel key={f.id} installRoot={installRoot} kind={kind} modId={id} file={f} gameRunning={gameRunning} casual={casual} isMap={isMap} onChanged={onChanged} />
+                  </div>
+                );
+              })}
+
               <dl className="ficha-dl">
                 <dt>{t("ficha.author")}</dt>
                 <dd>{d.data.submitter?.name ?? "—"}</dd>
@@ -656,35 +709,6 @@ function Ficha({
                 </Badge>
               )}
 
-              <h3>{t("ficha.files", { n: d.data.files.length })}</h3>
-              {d.data.files.length === 0 && <p className="muted">{t("ficha.noFiles")}</p>}
-              {d.data.files.map((f) => {
-                const exe = f.analysis_warnings && "contains_exe" in f.analysis_warnings;
-                return (
-                  <div className="file" key={f.id}>
-                    <span className="legend">{f.file_name}</span>
-                    <b>{fmtBytes(f.size)}</b>
-                    <div>
-                      {t("ficha.antivirus")} <b>{f.av_result ?? t("ficha.noResult")}</b>
-                    </div>
-                    {exe && (
-                      <p>
-                        <Badge tone="block" small>
-                          {t("ficha.hasExe")}
-                        </Badge>
-                      </p>
-                    )}
-                    {f.md5 && (
-                      <div>
-                        <code>MD5 {f.md5}</code>
-                      </div>
-                    )}
-                    <Analyzer key={`a${f.id}`} installRoot={installRoot} kind={kind} modId={id} file={f} icons={icons} hideSounds={soundFile?.id === f.id} />
-                    <CasualAddBox key={`c${f.id}`} kind={kind} modId={id} file={f} ready={casual.ready} unknown={casual.unknown} onGoCasual={casual.onGo} onAdded={casual.onAdded} />
-                    <InstallBox key={f.id} installRoot={installRoot} kind={kind} modId={id} file={f} gameRunning={gameRunning} onChanged={onChanged} />
-                  </div>
-                );
-              })}
             </div>
           </div>
           {zoom && cur && (

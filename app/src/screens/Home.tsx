@@ -29,11 +29,11 @@ interface Props {
   slideIndex: number;
   onSlide: (i: number) => void;
   onHeroHover: (hover: boolean) => void;
-  onOpenItem: (kind: "Mod" | "Sound", id: number) => void;
+  onOpenItem: (kind: "Mod" | "Sound", id: number, root?: string) => void;
 }
 
 /** Faixa horizontal de cartões (mods ou sons em alta). Rola com o dedo, o mouse ou o teclado. */
-function Rail({ title, kind, items, onOpen }: { title: string; kind: "Mod" | "Sound"; items: Summary[]; onOpen: (kind: "Mod" | "Sound", id: number) => void }) {
+function Rail({ title, kind, items, onOpen }: { title: string; kind: "Mod" | "Sound"; items: Summary[]; onOpen: (kind: "Mod" | "Sound", id: number, root?: string) => void }) {
   const { t } = useI18n();
   if (items.length === 0) return null;
   return (
@@ -42,7 +42,7 @@ function Rail({ title, kind, items, onOpen }: { title: string; kind: "Mod" | "So
       <ul className="rail-track">
         {items.map((r, i) => (
           <li key={r.id} style={{ ["--i" as string]: i }}>
-            <button className="rail-card glow" onClick={() => onOpen(kind, r.id)} aria-label={t("browse.open", { name: r.name })}>
+            <button className="rail-card glow" onClick={() => onOpen(kind, r.id, r.root_category?.name)} aria-label={t("browse.open", { name: r.name })}>
               <span className="rail-img">
                 {r.thumb ? <img src={r.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" /> : kind === "Sound" ? <Wave seed={r.id} /> : <Icon name="box" />}
               </span>
@@ -145,7 +145,7 @@ export function Home({
           )}
           <div className="hero-actions">
             {isGb && slide.gbId !== null ? (
-              <button className="btn primary" onClick={() => onOpenItem("Mod", slide.gbId!)}>
+              <button className="btn primary" onClick={() => onOpenItem("Mod", slide.gbId!, slide.category ?? undefined)}>
                 {t("home.viewInCatalog")}
               </button>
             ) : (

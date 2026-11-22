@@ -10,6 +10,20 @@ Format: newest first. Versions follow `major.minor.patch`.
 - Fonts: Bricolage Grotesque for headings and numbers, the system font for text. Lilita One is gone.
 - Items GameBanana flags as sensitive are never used as a background.
 
+### Added
+- **Class row in the Catalog**: the face of each class (read from your own game) works as a shortcut to that class's category, `Skins > The Scout` for mods and `Character Voice > Scout Voice` for sounds.
+- **One place to install**: the file card now asks *Where will you play?* (Casual on Valve's servers, or Offline and community) and shows only the right button, with a short explanation of the difference. **Maps** never offer Casual: the Casual Preloader doesn't load maps.
+- **Install with the game open**: new items can be copied to `custom` while TF2 is running, with a **Restart the game** button (asks first, because leaving a match counts as abandoning). Removing, reinstalling and applying the preloader still need the game closed.
+- **Installed**: all the items of one mod are one card, with a window that lists them. Hand-made items with the same root name (`pack_01`, `pack_02`, ...) are grouped too.
+- Sounds without a picture show a unique waveform; preview errors appear as a readable message instead of a tiny overlay.
+
+### Fixed
+- Searching by name no longer locks the order and the category. The search now goes through the same listing as the rest of the Catalog.
+- The category tree only shows the expand arrow when the category really has children.
+- Catalog and file pictures are sharper: cards use the 800 px version and the file page uses the original image.
+- The file page fits the window (each column scrolls on its own), so the install button no longer sits below the fold.
+- Casual: *Apply* and *So the game opens with the mods* sit side by side instead of leaving half the screen empty.
+
 ## 0.9.1
 
 ### Fixed

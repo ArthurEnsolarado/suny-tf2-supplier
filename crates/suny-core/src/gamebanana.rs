@@ -87,6 +87,10 @@ pub struct Category {
     pub name: String,
     #[serde(rename(deserialize = "_nItemCount"), default)]
     pub item_count: u64,
+    /// Quantas subcategorias tem (só a listagem de categorias informa; nos itens vem 0). A interface só mostra a seta
+    /// de "abrir" quando for maior que zero.
+    #[serde(rename(deserialize = "_nCategoryCount"), default)]
+    pub child_count: u64,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -136,7 +140,7 @@ fn media_urls(media: &serde_json::Value, prefer: &[&str], limit: usize) -> Vec<S
 
 fn thumb_from_media<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Option<String>, D::Error> {
     let v = Option::<serde_json::Value>::deserialize(d)?;
-    Ok(v.and_then(|m| media_urls(&m, &["_sFile530", "_sFile220", "_sFile100", "_sFile"], 1).into_iter().next()))
+    Ok(v.and_then(|m| media_urls(&m, &["_sFile800", "_sFile530", "_sFile220", "_sFile100", "_sFile"], 1).into_iter().next()))
 }
 
 /// Uma imagem da galeria: a grande (para o visualizador) e a miniatura (para a tira de baixo).
@@ -160,7 +164,8 @@ fn images_from_media<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Res
     Ok(images
         .iter()
         .filter_map(|img| {
-            let url = pick(img, &["_sFile800", "_sFile530", "_sFile"])?;
+            // O arquivo original primeiro: a ficha mostra a imagem grande, e as de 530/800 ficam borradas.
+            let url = pick(img, &["_sFile", "_sFile800", "_sFile530"])?;
             let thumb = pick(img, &["_sFile220", "_sFile100", "_sFile530", "_sFile"]).unwrap_or_else(|| url.clone());
             Some(GalleryImage { url, thumb })
         })
@@ -475,33 +480,25 @@ impl Client {
     fn list_url(&self, kind: Kind, sort: Sort, q: &Query) -> String {
         let per_page = if q.per_page == 0 { 20 } else { q.per_page.min(MAX_PER_PAGE) };
         let page = q.page.max(1);
-        match q.search.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-            Some(text) => format!(
-                "{}/Util/Search/Results?_sSearchString={}&_idGameRow={}&_sModelName={}&_nPerpage={}&_nPage={}",
-                self.base,
-                encode(text),
-                TF2_GAMEBANANA_ID,
-                kind.path(),
-                per_page,
-                page
-            ),
-            None => {
-                let mut url = format!(
-                    "{}/{}/Index?_aFilters%5BGeneric_Game%5D={}&_sSort={}&_nPerpage={}&_nPage={}",
-                    self.base,
-                    kind.path(),
-                    TF2_GAMEBANANA_ID,
-                    sort.param(),
-                    per_page,
-                    page
-                );
-                if let Some(cat) = q.category {
-                    url.push_str(&format!("&_aFilters%5BGeneric_Category%5D={cat}"));
-                }
-                url.push_str("&_csvProperties=_idRow,_sName,_sProfileUrl,_aSubmitter,_aRootCategory,_nLikeCount,_nViewCount,_aPreviewMedia");
-                url
-            }
+        // A busca por nome usa o filtro `Generic_Name=contains,<texto>` do próprio Index (conferido na API real):
+        // assim a ordem e a categoria escolhidas continuam valendo, ao contrário da busca geral (`Util/Search`).
+        let mut url = format!(
+            "{}/{}/Index?_aFilters%5BGeneric_Game%5D={}&_sSort={}&_nPerpage={}&_nPage={}",
+            self.base,
+            kind.path(),
+            TF2_GAMEBANANA_ID,
+            sort.param(),
+            per_page,
+            page
+        );
+        if let Some(cat) = q.category {
+            url.push_str(&format!("&_aFilters%5BGeneric_Category%5D={cat}"));
         }
+        if let Some(text) = q.search.as_deref().map(|s| s.replace(',', " ")).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
+            url.push_str(&format!("&_aFilters%5BGeneric_Name%5D=contains%2C{}", encode(&text)));
+        }
+        url.push_str("&_csvProperties=_idRow,_sName,_sProfileUrl,_aSubmitter,_aRootCategory,_nLikeCount,_nViewCount,_aPreviewMedia");
+        url
     }
 
     /// GET com repetição: o GameBanana (atrás do Cloudflare) às vezes devolve corpo vazio ou 5xx por um instante.
@@ -660,6 +657,11 @@ mod tests {
             }]}
         })).unwrap();
         assert_eq!(ok.thumb.as_deref(), Some("https://images.gamebanana.com/img/ss/mods/220-90_a.jpg"));
+        let big: Summary = serde_json::from_value(serde_json::json!({
+            "_idRow": 1, "_sName": "x", "_sProfileUrl": "u",
+            "_aPreviewMedia": {"_aImages": [{"_sBaseUrl": "https://images.gamebanana.com/img/ss/mods", "_sFile": "a.jpg", "_sFile800": "800-90_a.jpg", "_sFile530": "530-90_a.jpg"}]}
+        })).unwrap();
+        assert!(big.thumb.as_deref().unwrap().ends_with("/800-90_a.jpg"), "cartões usam a de 800 quando existe");
 
         let evil: Summary = serde_json::from_value(serde_json::json!({
             "_idRow": 1, "_sName": "x", "_sProfileUrl": "u",
@@ -681,7 +683,7 @@ mod tests {
             "_idRow": 1, "_sName": "x", "_sProfileUrl": "u", "_aPreviewMedia": {"_aImages": imgs}
         })).unwrap();
         assert_eq!(d.images.len(), 12);
-        assert!(d.images[0].url.ends_with("/530-90_0.jpg"), "sem _sFile800, usa a de 530");
+        assert!(d.images[0].url.ends_with("/0.jpg"), "a ficha usa o arquivo original");
         assert!(d.images[0].thumb.ends_with("/220-90_0.jpg"));
         assert!(d.images.iter().all(|i| i.url.starts_with("https://images.gamebanana.com/")));
     }
@@ -919,10 +921,27 @@ mod tests {
         assert!(u.contains("_nPage=1"));
         assert!(u.contains("Generic_Category%5D=1090"));
 
-        let q = Query { search: Some("hit sound".into()), ..Default::default() };
-        let u = c.list_url(Kind::Sound, Sort::Newest, &q);
-        assert!(u.contains("_sSearchString=hit%20sound"));
-        assert!(u.contains("_sModelName=Sound"));
+        // buscar por nome NÃO tira a ordem nem a categoria
+        let q = Query { search: Some("hit, sound".into()), category: Some(425), ..Default::default() };
+        let u = c.list_url(Kind::Sound, Sort::MostLiked, &q);
+        assert!(u.contains("Generic_Name%5D=contains%2Chit%20%20sound"), "{u}");
+        assert!(u.contains("Generic_Category%5D=425"), "{u}");
+        assert!(u.contains(&format!("_sSort={}", Sort::MostLiked.param())), "{u}");
+        assert!(u.contains("/Sound/Index?"), "{u}");
+        assert!(!u.contains("Util/Search"));
+        // texto só com espaços e vírgulas vira "sem busca"
+        let q = Query { search: Some(" , ".into()), ..Default::default() };
+        assert!(!c.list_url(Kind::Mod, Sort::Newest, &q).contains("Generic_Name"));
+    }
+
+    #[test]
+    fn categories_know_how_many_children_they_have() {
+        let c: Category = serde_json::from_str(r#"{"_idRow":425,"_sName":"Character Voice","_nItemCount":1092,"_nCategoryCount":10}"#).unwrap();
+        assert_eq!((c.item_count, c.child_count), (1092, 10));
+        let leaf: Category = serde_json::from_str(r#"{"_idRow":2279,"_sName":"Achievement","_nItemCount":108,"_nCategoryCount":0}"#).unwrap();
+        assert_eq!(leaf.child_count, 0);
+        let none: Category = serde_json::from_str(r#"{"_idRow":1,"_sName":"x"}"#).unwrap();
+        assert_eq!(none.child_count, 0, "campo ausente = sem filhas");
     }
 
     /// Teste contra a API real. Rode com `cargo test -- --ignored`.

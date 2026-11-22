@@ -79,6 +79,8 @@ export interface Category {
   id: number;
   name: string;
   item_count: number;
+  /** Quantas subcategorias tem (0 = não há o que abrir). */
+  child_count: number;
 }
 
 /** Arte do jogo lida da instalação do Steam do usuário (data URLs). */

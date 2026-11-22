@@ -26,17 +26,45 @@ fn is_tf2_process(name: &str, exe: Option<&Path>, cmd: &[String], root: Option<&
     in_root || game_tf
 }
 
-fn tf2_is_running(game_root: Option<&Path>) -> bool {
+/// PIDs dos processos do TF2 que estão abertos agora.
+fn tf2_pids(game_root: Option<&Path>) -> Vec<u32> {
     let mut sys = System::new();
     sys.refresh_processes_specifics(
         ProcessesToUpdate::All,
         true,
         ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet).with_cmd(UpdateKind::OnlyIfNotSet),
     );
-    sys.processes().values().any(|p| {
-        let cmd: Vec<String> = p.cmd().iter().map(|c| c.to_string_lossy().into_owned()).collect();
-        is_tf2_process(&p.name().to_string_lossy(), p.exe(), &cmd, game_root)
-    })
+    sys.processes()
+        .iter()
+        .filter(|(_, p)| {
+            let cmd: Vec<String> = p.cmd().iter().map(|c| c.to_string_lossy().into_owned()).collect();
+            is_tf2_process(&p.name().to_string_lossy(), p.exe(), &cmd, game_root)
+        })
+        .map(|(pid, _)| pid.as_u32())
+        .collect()
+}
+
+fn tf2_is_running(game_root: Option<&Path>) -> bool {
+    !tf2_pids(game_root).is_empty()
+}
+
+/// Pede ao TF2 que feche, do jeito educado (como clicar no X da janela): nunca força o encerramento. Devolve quantos
+/// processos receberam o pedido. O jogo pode demorar para fechar; quem chama confere depois com [`game_running`].
+pub fn request_game_close(game_root: Option<&Path>) -> usize {
+    let pids = tf2_pids(game_root);
+    for pid in &pids {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            // `taskkill` sem `/F` manda o pedido de fechar para a janela. 0x08000000 = sem janela de console piscando.
+            let _ = std::process::Command::new("taskkill").args(["/PID", &pid.to_string()]).creation_flags(0x0800_0000).output();
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = std::process::Command::new("kill").arg(pid.to_string()).output(); // SIGTERM: também é o pedido educado
+        }
+    }
+    pids.len()
 }
 
 /// Só o estado do jogo (barato: a interface consulta a cada poucos segundos).

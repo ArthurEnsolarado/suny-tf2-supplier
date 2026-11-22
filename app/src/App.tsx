@@ -9,6 +9,7 @@ import { Casual } from "./screens/Casual";
 import { Home } from "./screens/Home";
 import { Installed } from "./screens/Installed";
 import { PlayButton } from "./screens/PlayButton";
+import { RestartButton } from "./screens/RestartButton";
 import { Settings } from "./screens/Settings";
 import { UpdateDialog } from "./screens/UpdateDialog";
 import { useUpdate } from "./update";
@@ -81,9 +82,9 @@ export function App() {
     document.querySelector(".sheet")?.scrollTo(0, 0);
   };
   // Pedido de outra tela para abrir a ficha de um item no Catálogo.
-  const [openRequest, setOpenRequest] = useState<{ kind: "Mod" | "Sound"; id: number } | undefined>();
-  const openInCatalog = (kind: "Mod" | "Sound", id: number) => {
-    setOpenRequest({ kind, id });
+  const [openRequest, setOpenRequest] = useState<{ kind: "Mod" | "Sound"; id: number; root?: string } | undefined>();
+  const openInCatalog = (kind: "Mod" | "Sound", id: number, root?: string) => {
+    setOpenRequest({ kind, id, root });
     go("browse");
   };
   const [path, setPath] = useState<string | undefined>(() => readStored(STORE_KEY));
@@ -173,6 +174,8 @@ export function App() {
 
   // Ícones de classe do próprio jogo (do disco do usuário). Sem o jogo, o app segue sem eles.
   const icons = useAsync<GameIcons | null>(() => (path ? call<GameIcons>("game_icons", { path }).catch(() => null) : Promise.resolve(null)), [path]);
+  // Retratos das classes (o rosto dos personagens), para a fileira de classes do Catálogo.
+  const portraits = useAsync<GameIcons | null>(() => (path ? call<GameIcons>("class_portraits", { path }).catch(() => null) : Promise.resolve(null)), [path]);
 
   // Botão de jogar: abre o TF2 pelo Steam. Fica indisponível enquanto o jogo abre e enquanto ele está aberto.
   const [launching, setLaunching] = useState(false);
@@ -253,10 +256,13 @@ export function App() {
             {t(TABS[Math.max(0, activeIdx)]?.label ?? "tab.home")}
           </div>
           <div className="top-right">
-            <span className={`pulse ${running ? "on" : ""}`} title={running ? t("status.open") : t("status.closed")}>
-              <i aria-hidden="true" />
-              {running ? t("status.open") : t("status.closed")}
-            </span>
+            {!running && (
+              <span className="pulse" title={t("status.closed")}>
+                <i aria-hidden="true" />
+                {t("status.closed")}
+              </span>
+            )}
+            {running && <RestartButton path={path} compact />}
             <PlayButton play={{ running, launching, canPlay, error: launchError, onPlay: play }} compact />
           </div>
         </header>
@@ -310,6 +316,7 @@ export function App() {
               installRoot={inspect.data?.installation.root}
               installed={installed}
               icons={icons.data?.icons ?? {}}
+              portraits={portraits.data?.icons ?? {}}
               onChanged={inspect.reload}
               gameRunning={running}
               casual={{ ready: casual.data?.runtime === "ready", unknown: !casual.data, onGo: () => go("casual"), onAdded: casual.reload }}
