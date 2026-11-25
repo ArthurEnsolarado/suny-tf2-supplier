@@ -3,7 +3,7 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
-## Unreleased
+## 0.11.2
 
 ### Fixed
 - **Catalog mods that are just loose files can be installed.** Some old pages ship one or two files with no game folders and explain in the text where to put them (for example *tf\materials\models\weapons\c_items*), and "Add to Casual" answered "couldn't recognize the mod structure". The app now puts those files in the right folder before analyzing, installing or adding them: it uses the original game's files first and the folder the author wrote on the page second. Packs that already have the structure, carry a `.vpk` or have several variants are not changed.
