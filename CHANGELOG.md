@@ -3,7 +3,7 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
-## Unreleased
+## 0.12.0
 
 ### Added
 - **The app now sees mods that fight each other**, across the Casual list, mods in `custom` (installed by the app or by hand) and what you are about to install.
