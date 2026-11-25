@@ -10,6 +10,8 @@ import { JobBar } from "./JobBar";
 interface Props {
   kind: Kind;
   modId: number;
+  /** Pasta do TF2: arquivos soltos do pacote são colocados conforme os originais do jogo. */
+  installRoot: string | undefined;
   file: FileInfo;
   /** O Casual Preloader já está configurado no app? */
   ready: boolean;
@@ -21,7 +23,7 @@ interface Props {
 }
 
 /** Botão "Adicionar ao Casual": baixa o arquivo e o coloca na lista do preloader. Não altera o jogo. */
-export function CasualAddBox({ kind, modId, file, ready, unknown, onGoCasual, onAdded }: Props) {
+export function CasualAddBox({ kind, modId, installRoot, file, ready, unknown, onGoCasual, onAdded }: Props) {
   const { t, T, tc } = useI18n();
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -57,7 +59,7 @@ export function CasualAddBox({ kind, modId, file, ready, unknown, onGoCasual, on
     setStarting(true);
     setError(undefined);
     setAdded(undefined);
-    call<CasualJob>("casual_add", { kind, id: modId, file_id: file.id }).then(
+    call<CasualJob>("casual_add", { path: installRoot ?? null, kind, id: modId, file_id: file.id }).then(
       (j) => {
         setStarting(false);
         track(j);

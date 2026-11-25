@@ -11,7 +11,7 @@ use serde::Serialize;
 use crate::{Error, Result};
 
 /// Pastas de primeiro nível que o TF2 reconhece.
-const GAME_ROOTS: &[&str] = &[
+pub(crate) const GAME_ROOTS: &[&str] = &[
     "models", "materials", "sound", "particles", "scripts", "resource", "cfg", "maps", "expressions",
     "media", "scenes", "ui", "vgui", "bin", "classes", "lua", "panorama", "shaders",
 ];

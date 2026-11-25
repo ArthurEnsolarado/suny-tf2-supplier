@@ -125,6 +125,8 @@ struct CasualStatusArgs {
 
 #[derive(Deserialize)]
 struct CasualAddArgs {
+    /// Raiz do TF2 (opcional): para achar a pasta certa de arquivos soltos.
+    path: Option<String>,
     kind: Kind,
     id: u64,
     file_id: u64,
@@ -230,6 +232,19 @@ async fn fetch_as_zip(client: &Client, file: &crate::gamebanana::FileInfo, dest_
     let res = tokio::task::spawn_blocking(move || archive::convert_to_zip(&src, fmt, &dest)).await.map_err(|e| e.to_string())?;
     let _ = std::fs::remove_file(&original); // o arquivo original nunca fica no computador
     res.map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Um pacote do catálogo só com arquivos soltos ("instale em tf/materials/…") ganha as pastas antes de ser analisado,
+/// instalado ou entregue ao casual. Pacotes que já têm a estrutura passam sem mudança.
+async fn organize_download(zip: &Path, tf_dir: Option<PathBuf>, description: Option<&str>) -> Result<(), String> {
+    let hints = localmod::install_hints(description.unwrap_or(""));
+    let zip = zip.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        let index = tf_dir.as_deref().map(vanilla::index_for);
+        localmod::organize_zip(&zip, index.as_deref(), &hints).map(|_| ()).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// `SUNY_NO_GAME_ART=1`: roda sem ler banner, logo e ícones de classe do jogo (arte da Valve). Serve para tirar
@@ -524,6 +539,7 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
 
             let staging = std::env::temp_dir().join("suny-tf2-supplier").join(format!("{}-{}.zip", p.kind.as_str(), file.id));
             fetch_as_zip(client, file, &staging, MAX_DOWNLOAD).await?;
+            organize_download(&staging, Some(install.tf_dir.clone()), details.description.as_deref()).await?;
 
             let meta = ModMeta {
                 gb_id: details.id,
@@ -854,6 +870,7 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
             prune_cache(&analysis_cache_dir(), &dest);
 
             let tf_dir = p.path.and_then(|s| resolve(&s).ok()).map(|i| i.tf_dir);
+            organize_download(&dest, tf_dir.clone(), details.description.as_deref()).await?;
             let analysed = tokio::task::spawn_blocking(move || {
                 let index = tf_dir.as_deref().map(vanilla::index_for);
                 analysis::analyze_zip(&dest, index.as_deref())
@@ -925,6 +942,8 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
                 fetch_as_zip(client, file, &dest, MAX_DOWNLOAD).await?;
             }
             prune_cache(&analysis_cache_dir(), &dest);
+            let tf_dir = p.path.and_then(|s| resolve(&s).ok()).map(|i| i.tf_dir);
+            organize_download(&dest, tf_dir, details.description.as_deref()).await?;
             let source = casual::AddonSource {
                 kind: p.kind.as_str().to_string(),
                 gb_id: details.id,

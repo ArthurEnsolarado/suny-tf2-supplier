@@ -78,7 +78,7 @@ export function InstallPanel({ installRoot, kind, modId, file, gameRunning, casu
         </details>
       )}
       {dest === "casual" && !isMap ? (
-        <CasualAddBox key={`c${file.id}`} kind={kind} modId={modId} file={file} ready={casual.ready} unknown={casual.unknown} onGoCasual={casual.onGo} onAdded={casual.onAdded} />
+        <CasualAddBox key={`c${file.id}`} installRoot={installRoot} kind={kind} modId={modId} file={file} ready={casual.ready} unknown={casual.unknown} onGoCasual={casual.onGo} onAdded={casual.onAdded} />
       ) : (
         <InstallBox key={`i${file.id}`} installRoot={installRoot} kind={kind} modId={modId} file={file} gameRunning={gameRunning} onChanged={onChanged} />
       )}

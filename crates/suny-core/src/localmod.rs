@@ -251,8 +251,76 @@ fn pick_vanilla(cands: &[String], entry_path: &str) -> Option<String> {
     }
 }
 
+/// Pastas do jogo que o autor escreveu nas instruções (`...\tf\materials\models\weapons\c_items`).
+/// Vale um caminho depois de `tf/`, ou um com pelo menos duas pastas abaixo da raiz (`materials/models/weapons`):
+/// `models/skins` solto no meio de uma frase não conta. É texto de terceiros: só sai daqui `a-z 0-9 _ - .`, sem `..`.
+pub fn install_hints(text: &str) -> Vec<String> {
+    let text = text.to_ascii_lowercase().replace('\\', "/");
+    let mut out: Vec<String> = Vec::new();
+    // espaço separa caminhos; o único espaço que importa (`team fortress 2/tf/...`) fica antes do `tf/`
+    for token in text.split(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | '/'))) {
+        if token.split('/').any(|s| s == "..") {
+            continue;
+        }
+        let mut segs: Vec<&str> = token.split('/').map(|s| s.trim_end_matches('.')).filter(|s| !s.is_empty()).collect();
+        let Some(start) = segs.iter().position(|s| scanner::GAME_ROOTS.contains(s)) else { continue };
+        let after_tf = segs[..start].contains(&"tf");
+        segs.drain(..start);
+        // o autor às vezes escreve o caminho até o arquivo: o que importa é a pasta
+        if segs.len() > 1 && segs.last().is_some_and(|s| PLACEABLE.contains(&lower_ext(s).as_str())) {
+            segs.pop();
+        }
+        if !after_tf && segs.len() < 3 {
+            continue;
+        }
+        let folder = segs.join("/");
+        if !out.contains(&folder) {
+            out.push(folder);
+        }
+    }
+    out
+}
+
+/// A única pasta indicada pelo autor que serve para esta extensão. Duas pastas diferentes = não dá para saber.
+fn hinted_folder<'a>(hints: &'a [String], ext: &str) -> Option<&'a str> {
+    let root = match ext {
+        "vtf" | "vmt" => "materials",
+        "wav" | "mp3" | "ogg" => "sound",
+        "mdl" | "vvd" | "vtx" | "phy" | "ani" => "models",
+        _ => return None,
+    };
+    let mut fit = hints.iter().filter(|h| h.split('/').next() == Some(root));
+    let first = fit.next()?;
+    fit.next().is_none().then_some(first.as_str())
+}
+
+/// Pacote do catálogo que veio SEM nenhuma pasta do jogo (só arquivos soltos, com a instalação explicada na página):
+/// arruma o zip no próprio lugar. Quem já tem estrutura ou `.vpk` não é tocado, e se dois arquivos soltos têm o mesmo
+/// nome (variantes), nada é movido: aqui o usuário não vê o que ficaria de fora.
+pub fn organize_zip(zip: &Path, vanilla: Option<&VanillaIndex>, hints: &[String]) -> Result<Vec<Moved>> {
+    let names = scanner::zip_paths(File::open(zip).map_err(|e| Error::io(zip, e))?)?;
+    let files = || names.iter().filter(|n| !n.ends_with('/') && !n.ends_with('\\'));
+    if files().any(|n| scanner::is_game_path(&scanner::game_relative(n)) || lower_ext(n) == "vpk") {
+        return Ok(Vec::new());
+    }
+    let mut seen = HashSet::new();
+    if files().filter(|n| PLACEABLE.contains(&lower_ext(n).as_str())).any(|n| !seen.insert(base_name(n).to_ascii_lowercase())) {
+        return Ok(Vec::new());
+    }
+    let (renames, moved, _) = plan_moves(&names, vanilla, hints);
+    if renames.is_empty() {
+        return Ok(moved);
+    }
+    let tmp = zip.with_extension("organizing.tmp");
+    let done = rewrite_zip(zip, &tmp, &renames).and_then(|()| fs::rename(&tmp, zip).map_err(|e| Error::io(zip, e)));
+    if done.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    done.map(|()| moved)
+}
+
 /// Decide o novo nome de cada entrada que não está numa pasta do jogo. Devolve (índice → nome novo, movidos, sem lugar).
-fn plan_moves(names: &[String], vanilla: Option<&VanillaIndex>) -> (HashMap<usize, String>, Vec<Moved>, Vec<String>) {
+fn plan_moves(names: &[String], vanilla: Option<&VanillaIndex>, hints: &[String]) -> (HashMap<usize, String>, Vec<Moved>, Vec<String>) {
     let mut wanted: HashSet<String> = HashSet::new();
     let mut loose: Vec<usize> = Vec::new();
     for (i, name) in names.iter().enumerate() {
@@ -287,7 +355,16 @@ fn plan_moves(names: &[String], vanilla: Option<&VanillaIndex>) -> (HashMap<usiz
             "bsp" => Some(format!("maps/{base}")),
             "cfg" => Some(format!("cfg/{base}")),
             "pcf" => Some(format!("particles/{base}")),
-            _ => index.get(&base).and_then(|c| pick_vanilla(c, name)),
+            ext => {
+                let originals = index.get(&base);
+                match hinted_folder(hints, ext).map(|folder| format!("{folder}/{base}")) {
+                    // o autor e o jogo concordam
+                    Some(h) if originals.is_some_and(|c| c.contains(&h)) => Some(h),
+                    // senão vale o único lugar onde o jogo tem esse nome (instruções antigas ficam erradas quando a
+                    // Valve muda um arquivo de pasta); só um arquivo que o jogo não localiza fica onde o autor mandou
+                    hinted => originals.and_then(|c| pick_vanilla(c, name)).or(hinted),
+                }
+            }
         };
         match to {
             // dois arquivos soltos que cairiam no mesmo lugar: o segundo fica de fora em vez de sobrescrever
@@ -396,7 +473,7 @@ pub fn stage(paths: &[PathBuf], cache: &Path, vanilla: Option<&VanillaIndex>) ->
             return Err(e);
         }
     };
-    let (renames, moved, unplaced) = plan_moves(&names, vanilla);
+    let (renames, moved, unplaced) = plan_moves(&names, vanilla, &[]);
     let final_tmp = unique_tmp(cache, "out");
     let made = if renames.is_empty() {
         if owned {
@@ -481,7 +558,7 @@ mod tests {
     fn loose_sounds_go_where_the_original_game_has_them_and_only_when_it_is_certain() {
         let names: Vec<String> = ["hitsound.wav", "Pack/killsound.wav", "weird_new_sound.wav", "mapa.bsp", "autoexec.cfg", "fx.pcf", "readme.txt", "preview.png"].iter().map(|s| s.to_string()).collect();
         // hitsound.wav existe em dois lugares no jogo: sozinho é ambíguo
-        let (renames, moved, unplaced) = plan_moves(&names, Some(&vanilla()));
+        let (renames, moved, unplaced) = plan_moves(&names, Some(&vanilla()), &[]);
         let to: HashMap<&str, &str> = moved.iter().map(|m| (m.from.as_str(), m.to.as_str())).collect();
         assert_eq!(to.get("Pack/killsound.wav"), Some(&"sound/ui/killsound.wav"));
         assert_eq!(to.get("mapa.bsp"), Some(&"maps/mapa.bsp"));
@@ -495,18 +572,18 @@ mod tests {
 
     #[test]
     fn a_folder_hint_resolves_a_name_that_exists_twice() {
-        let (_, moved, unplaced) = plan_moves(&[r"misc\hitsound.wav".to_string()], Some(&vanilla()));
+        let (_, moved, unplaced) = plan_moves(&[r"misc\hitsound.wav".to_string()], Some(&vanilla()), &[]);
         assert!(unplaced.is_empty(), "{unplaced:?}");
         assert_eq!(moved[0].to, "sound/misc/hitsound.wav");
         // uma pasta que não existe no jogo para esse nome não ajuda: continua ambíguo
-        let (_, moved, unplaced) = plan_moves(&["Pack/hitsound.wav".to_string()], Some(&vanilla()));
+        let (_, moved, unplaced) = plan_moves(&["Pack/hitsound.wav".to_string()], Some(&vanilla()), &[]);
         assert!(moved.is_empty() && unplaced.len() == 1);
     }
 
     #[test]
     fn without_the_game_index_only_extension_based_files_are_placed() {
         let names = vec!["hitsound.wav".to_string(), "x.bsp".to_string()];
-        let (_, moved, unplaced) = plan_moves(&names, None);
+        let (_, moved, unplaced) = plan_moves(&names, None, &[]);
         assert_eq!(moved.len(), 1);
         assert_eq!(unplaced, vec!["hitsound.wav".to_string()]);
     }
@@ -514,14 +591,14 @@ mod tests {
     #[test]
     fn files_already_in_game_folders_and_vpks_are_left_alone() {
         let names: Vec<String> = ["MyMod/sound/ui/hitsound.wav", "tf/custom/x/materials/a.vmt", "pack_dir.vpk", "pack_000.vpk", "sound/ui/killsound.wav"].iter().map(|s| s.to_string()).collect();
-        let (renames, moved, unplaced) = plan_moves(&names, Some(&vanilla()));
+        let (renames, moved, unplaced) = plan_moves(&names, Some(&vanilla()), &[]);
         assert!(renames.is_empty() && moved.is_empty() && unplaced.is_empty());
     }
 
     #[test]
     fn two_loose_files_that_land_in_the_same_place_do_not_overwrite_each_other() {
         let names = vec!["a/killsound.wav".to_string(), "b/killsound.wav".to_string()];
-        let (renames, moved, unplaced) = plan_moves(&names, Some(&vanilla()));
+        let (renames, moved, unplaced) = plan_moves(&names, Some(&vanilla()), &[]);
         assert_eq!((renames.len(), moved.len(), unplaced.len()), (1, 1, 1));
     }
 
@@ -639,5 +716,71 @@ mod tests {
         assert_eq!((m.kind.as_str(), m.gb_id, m.file_id, m.name.as_str()), ("Local", 0, 0xff10, "Meu Hitsound"));
         assert_eq!(meta_for(&s, "   ").name, "X Mod");
         assert!(m.profile_url.is_empty() && m.submitter.is_none());
+    }
+
+
+    #[test]
+    fn reads_the_folder_the_author_wrote_in_the_page() {
+        let page = "Install it in \r\n\r\nC:\\Steam\\steamapps\\USERNAMEHERE\\team fortress 2\\tf\\materials\\models\\weapons\\c_items";
+        assert_eq!(install_hints(page), vec!["materials/models/weapons/c_items"]);
+        assert_eq!(install_hints("put it in tf/sound/ui."), vec!["sound/ui"]);
+        assert_eq!(install_hints("goes to materials/models/weapons/c_bat/c_bat.vmt"), vec!["materials/models/weapons/c_bat"]);
+        assert!(install_hints("nice models/skins, see https://gamebanana.com/mods/1").is_empty(), "texto comum não é instrução");
+        assert!(install_hints("tf/materials/../../../windows").is_empty(), "nada de sair da pasta");
+    }
+
+    #[test]
+    fn two_different_folders_for_the_same_kind_are_not_a_hint() {
+        let hints = install_hints("red: tf/materials/models/a blue: tf/materials/models/b sounds: tf/sound/ui");
+        assert_eq!(hinted_folder(&hints, "vmt"), None);
+        assert_eq!(hinted_folder(&hints, "wav"), Some("sound/ui"));
+        assert_eq!(hinted_folder(&hints, "bsp"), None);
+    }
+
+    #[test]
+    fn the_game_wins_over_an_outdated_instruction() {
+        let v = VanillaIndex::from_paths(["materials/models/new_place/axe.vmt"]);
+        let hints = vec!["materials/models/old_place".to_string()];
+        let (_, moved, _) = plan_moves(&["axe.vmt".to_string(), "axe_glow.vtf".to_string()], Some(&v), &hints);
+        assert_eq!(moved[0].to, "materials/models/new_place/axe.vmt");
+        assert_eq!(moved[1].to, "materials/models/old_place/axe_glow.vtf", "arquivo novo fica onde o autor mandou");
+    }
+
+    #[test]
+    fn a_catalog_pack_with_only_loose_files_installs_after_being_organized() {
+        let d = tmp("hint");
+        for (n, body) in [("c_headtaker.vmt", "x"), ("readme.txt", "y")] {
+            write(&d.join(n), body.as_bytes());
+        }
+        let items = collect(&[d.join("c_headtaker.vmt"), d.join("readme.txt")]).unwrap();
+        let zip = d.join("Mod-1.zip");
+        build_zip(&items, &zip).unwrap();
+        let hints = install_hints("Install it in C:\\x\\team fortress 2\\tf\\materials\\models\\weapons\\c_items");
+        assert_eq!(organize_zip(&zip, None, &hints).unwrap().len(), 1);
+        assert_eq!(names_in(&zip), vec!["materials/models/weapons/c_items/c_headtaker.vmt", "readme.txt"]);
+        assert!(organize_zip(&zip, None, &hints).unwrap().is_empty(), "rodar de novo não muda nada");
+        crate::casual::precheck_zip(&zip).unwrap();
+        let meta = ModMeta { gb_id: 1, kind: "Mod".into(), file_id: 1, file_name: "a.rar".into(), name: "Axe".into(), version: None, submitter: None, profile_url: String::new(), license: None, md5: None };
+        let out = crate::installer::install_zip(&zip, &d.join("custom"), meta).unwrap();
+        assert_eq!(out.manifest.files.len(), 1);
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn organizing_never_touches_a_structured_pack_or_variants() {
+        let d = tmp("hint_keep");
+        let hints = vec!["materials/models/x".to_string()];
+        for (tag, files) in [("estrutura", vec!["materials/a.vmt", "extra.vmt"]), ("vpk", vec!["pack.vpk", "extra.vmt"]), ("variantes", vec!["red/a.vmt", "blue/a.vmt"])] {
+            let root = d.join(tag);
+            for f in &files {
+                write(&root.join(f), b"x");
+            }
+            let zip = d.join(format!("{tag}.zip"));
+            build_zip(&collect(&[root]).unwrap(), &zip).unwrap();
+            let before = names_in(&zip);
+            assert!(organize_zip(&zip, None, &hints).unwrap().is_empty(), "{tag}");
+            assert_eq!(names_in(&zip), before, "{tag}");
+        }
+        let _ = fs::remove_dir_all(&d);
     }
 }
