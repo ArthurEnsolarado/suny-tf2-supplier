@@ -3738,6 +3738,7 @@ name = "suny-core"
 version = "0.11.3"
 dependencies = [
  "base64 0.22.1",
+ "crc32fast",
  "keyvalues-parser",
  "md-5",
  "png 0.17.16",

@@ -6,6 +6,7 @@ pub mod analysis;
 pub mod archive;
 pub mod art;
 pub mod casual;
+pub mod conflicts;
 pub mod commands;
 pub mod contents;
 pub mod error;

@@ -3,6 +3,17 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## Unreleased
+
+### Added
+- **The app now sees mods that fight each other**, across the Casual list, mods in `custom` (installed by the app or by hand) and what you are about to install.
+  - **Same files, different content: blocked.** In the Casual tab you choose which one stays; *Apply* waits until the conflict is solved. Installing to `custom` something that fights with `custom` or with a ticked Casual mod is refused, saying which one and which file, and nothing is written. A new Casual mod that fights with a ticked one enters the list unticked. The parts of a model (`.mdl`, `.vvd`, `.vtx`, `.phy`, `.ani`) count as one thing, so two mods can't be mixed inside one model.
+  - **Different files, same object: a warning** (same weapon, cosmetic, character, two HUDs, or variations of one sound split between two mods). You decide. The object is estimated from file paths, so not every case is noticed.
+  - Identical copies of a file don't count, and neither does the same GameBanana item present in both Casual and `custom`.
+
+### Fixed
+- **Windows are no longer covered by the top bar** (since 0.11.1 the title and the *Close* button of a window could end up under it).
+
 ## 0.11.3
 
 ### Changed

@@ -53,6 +53,10 @@ pub enum Error {
     #[error("o Team Fortress 2 está aberto. Feche o jogo antes de instalar ou remover mods")]
     GameRunning,
 
+    /// Dois mods trazem os mesmos arquivos: a mensagem diz quais.
+    #[error("{0}")]
+    Conflict(String),
+
     #[error("nome inválido: {0}")]
     BadName(String),
 

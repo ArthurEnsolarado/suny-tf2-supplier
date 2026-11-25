@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 use crate::gamebanana::{Client, Kind, Query, Sort};
 use crate::steam::Installation;
 use crate::installer::{self, ModMeta};
-use crate::{analysis, archive, art, casual, contents, gameicons, library, localmod, steam, system, update, vanilla, Error};
+use crate::{analysis, archive, art, casual, conflicts, contents, gameicons, library, localmod, steam, system, update, vanilla, Error};
 
 #[derive(Deserialize)]
 struct ListArgs {
@@ -139,6 +139,8 @@ struct CasualNameArgs {
 
 #[derive(Deserialize)]
 struct CasualNamesArgs {
+    /// Raiz do TF2 (opcional): para comparar também com o que está em custom.
+    path: Option<String>,
     names: Vec<String>,
 }
 
@@ -245,6 +247,12 @@ async fn organize_download(zip: &Path, tf_dir: Option<PathBuf>, description: Opt
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Instala em `custom` só o que não briga com o que já está lá nem com o que está marcado no casual.
+fn guarded_install(zip: &Path, custom: &Path, meta: ModMeta) -> crate::Result<installer::InstallOutcome> {
+    conflicts::check_install(zip, custom, &meta, &casual::Layout::default())?;
+    installer::install_zip(zip, custom, meta)
 }
 
 /// `SUNY_NO_GAME_ART=1`: roda sem ler banner, logo e ícones de classe do jogo (arte da Valve). Serve para tirar
@@ -559,7 +567,7 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
                 return Err(Error::GameRunning.to_string());
             }
             let zip_path = staging.clone();
-            let outcome = tokio::task::spawn_blocking(move || installer::install_zip(&zip_path, &custom, meta))
+            let outcome = tokio::task::spawn_blocking(move || guarded_install(&zip_path, &custom, meta))
                 .await
                 .map_err(|e| e.to_string())?;
             let _ = std::fs::remove_file(&staging); // o zip temporário nunca fica no computador
@@ -633,7 +641,7 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
                     return Err(Error::GameRunning.to_string());
                 }
                 let zip_path = staged.zip.clone();
-                let outcome = tokio::task::spawn_blocking(move || installer::install_zip(&zip_path, &custom, meta))
+                let outcome = tokio::task::spawn_blocking(move || guarded_install(&zip_path, &custom, meta))
                     .await
                     .map_err(|e| e.to_string())?;
                 return out(outcome.map_err(|e| e.to_string())?);
@@ -975,10 +983,34 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
         // Quais mods entram na próxima aplicação.
         "casual_enable" => {
             let p: CasualNamesArgs = args(a)?;
-            tokio::task::spawn_blocking(move || casual::set_enabled(&casual::Layout::default(), p.names))
-                .await
-                .map_err(|e| e.to_string())??;
+            tokio::task::spawn_blocking(move || -> Result<(), String> {
+                let l = casual::Layout::default();
+                let custom = p.path.as_deref().and_then(|s| resolve(s).ok()).map(|i| i.custom_dir());
+                let before = casual::enabled_names(&l);
+                let added: Vec<String> = p.names.iter().filter(|n| !before.contains(n)).cloned().collect();
+                if let Some(c) = conflicts::casual_block(&l, custom.as_deref(), &p.names, Some(&added)).map_err(|e| e.to_string())? {
+                    return Err(conflicts::refusal(&c));
+                }
+                casual::set_enabled(&l, p.names)
+            })
+            .await
+            .map_err(|e| e.to_string())??;
             Ok(json!({ "saved": true }))
+        }
+
+        // Quem briga com quem: tudo que está na lista do casual e em custom. Só leitura.
+        "conflicts" => {
+            let p: GameStateArgs = args(a)?;
+            tokio::task::spawn_blocking(move || {
+                let l = casual::Layout::default();
+                let mut mods = conflicts::casual_mods(&l);
+                if let Some(install) = p.path.as_deref().and_then(|s| resolve(s).ok()) {
+                    mods.extend(conflicts::custom_mods(&install.custom_dir()).map_err(|e| e.to_string())?);
+                }
+                out(json!({ "clashes": conflicts::find(&mods) }))
+            })
+            .await
+            .map_err(|e| e.to_string())?
         }
 
         // Aplica os mods escolhidos no jogo. Só com o TF2 fechado.
@@ -990,6 +1022,14 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
             }
             let install = resolve(&p.path)?;
             ensure_game_closed(install.root.clone()).await?;
+            let (custom, selected, layout) = (install.custom_dir(), p.addons.clone(), casual::Layout::default());
+            let hit = tokio::task::spawn_blocking(move || conflicts::casual_block(&layout, Some(&custom), &selected, None))
+                .await
+                .map_err(|e| e.to_string())?
+                .map_err(|e| e.to_string())?;
+            if let Some(c) = hit {
+                return Err(conflicts::refusal(&c));
+            }
             let tf_dir = install.tf_dir.clone();
             out(casual::start_job("apply", "Aplicar mods no jogo", move |rep| casual::apply(l, tf_dir, p.addons, p.options, rep))?)
         }

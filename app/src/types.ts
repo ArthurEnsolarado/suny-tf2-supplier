@@ -235,6 +235,24 @@ export interface CasualSource {
   added_at: number;
 }
 
+/** Um dos dois mods de uma briga. */
+export interface ClashSide {
+  /** Casual: nome do addon. Custom: slug do app ou nome da entrada. */
+  id: string;
+  name: string;
+  place: "casual" | "custom" | "new";
+}
+
+/** `block`: trazem os mesmos arquivos. `warn`: arquivos diferentes no mesmo objeto. */
+export interface Clash {
+  a: ClashSide;
+  b: ClashSide;
+  level: "block" | "warn";
+  files: number;
+  examples: string[];
+  objects: { kind: "weapon" | "cosmetic" | "player" | "hud" | "sound"; name: string }[];
+}
+
 export interface CasualAddon {
   name: string;
   kind: string;

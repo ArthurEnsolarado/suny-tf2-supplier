@@ -31,6 +31,7 @@ struct Entry {
     archive: u16,
     offset: u32,
     len: u32,
+    crc: u32,
     preload: Vec<u8>,
 }
 
@@ -119,7 +120,7 @@ impl Vpk {
                     if name.is_empty() {
                         break;
                     }
-                    let _crc = c.u32()?;
+                    let crc = c.u32()?;
                     let preload_len = c.u16()? as usize;
                     let archive = c.u16()?;
                     let offset = c.u32()?;
@@ -142,7 +143,7 @@ impl Vpk {
                     }
                     let key = full.to_ascii_lowercase();
                     if wanted(&key) {
-                        sink(key, Entry { archive, offset, len, preload: preload.to_vec() });
+                        sink(key, Entry { archive, offset, len, crc, preload: preload.to_vec() });
                     }
                 }
             }
@@ -200,6 +201,13 @@ impl Vpk {
 pub fn list_paths(dir_vpk: &Path, wanted: impl Fn(&str) -> bool) -> Result<Vec<String>> {
     let mut out = Vec::new();
     Vpk::scan(dir_vpk, &wanted, |k, _| out.push(k))?;
+    Ok(out)
+}
+
+/// (caminho, tamanho, CRC-32) de cada arquivo de um `*_dir.vpk`, direto do índice: serve para saber se duas cópias são iguais.
+pub fn list_prints(dir_vpk: &Path) -> Result<Vec<(String, u64, u32)>> {
+    let mut out = Vec::new();
+    Vpk::scan(dir_vpk, &|_| true, |k, e| out.push((k, e.preload.len() as u64 + u64::from(e.len), e.crc)))?;
     Ok(out)
 }
 

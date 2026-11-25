@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { call } from "../api";
 import { fmtBytes } from "../format";
 import { useI18n } from "../i18n";
-import type { CasualJob, CasualStatus, Inspect } from "../types";
-import { Badge, ErrorState } from "../ui";
+import type { CasualJob, CasualStatus, Clash, ClashSide, Inspect } from "../types";
+import { Badge, ErrorState, useAsync } from "../ui";
 import { useJob } from "../useJob";
+import { casualClashes, ClashList, sideActive } from "./Clashes";
 import { JobBar } from "./JobBar";
+import { Modal } from "./Modal";
 import { ModCard } from "./ModCard";
 
 const LAUNCH_OPTION = "+exec w/config.cfg";
@@ -35,6 +37,17 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
   const [copied, setCopied] = useState(false);
   // O que está marcado para entrar na próxima aplicação (começa pelo que o núcleo guardou).
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  // Marcar este mod bate de frente com outros: o usuário escolhe quem fica.
+  const [choice, setChoice] = useState<{ name: string; blockers: Clash[] } | undefined>();
+
+  // Quem briga com quem (lista do casual e custom). Só leitura; refeito quando a lista ou o jogo mudam.
+  const root = inspect?.installation.root;
+  const listKey = status?.addons.map((a) => `${a.name}:${a.size_bytes}`).join("|") ?? "";
+  const customKey = inspect?.custom.map((e) => `${e.name}:${e.size_bytes}`).join("|") ?? "";
+  const found = useAsync<{ clashes: Clash[] } | null>(
+    () => (status?.runtime === "ready" ? call<{ clashes: Clash[] }>("conflicts", { path: root ?? null }).catch(() => null) : Promise.resolve(null)),
+    [status?.runtime, root, listKey, customKey],
+  );
 
   const { job, track, dismiss } = useJob((j: CasualJob) => {
     onReload();
@@ -61,7 +74,6 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
   }
 
   const busy = job?.state === "running";
-  const root = inspect?.installation.root;
   const gameRunning = inspect?.system.game_running ?? false;
   const ready = status.runtime === "ready";
   const addons = status.addons;
@@ -74,12 +86,49 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
     call<CasualJob>(name, args).then(track, (e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   };
 
+  const clashes = found.data?.clashes ?? [];
+  const live = casualClashes(clashes, checked);
+  const blocks = live.filter((c) => c.level === "block");
+  const warns = live.filter((c) => c.level === "warn");
+
+  const save = (next: Set<string>) => {
+    setChecked(next);
+    setError(undefined);
+    call("casual_enable", { path: root ?? null, names: [...next] }).catch((e: unknown) => {
+      setError(e instanceof Error ? e.message : String(e));
+      onReload(); // o núcleo recusou: volta as marcas ao que está guardado
+    });
+  };
+
+  const isSelf = (s: ClashSide, name: string) => s.place === "casual" && s.id === name;
+  const rivalOf = (c: Clash, name: string) => (isSelf(c.a, name) ? c.b : c.a);
+
   const toggle = (name: string) => {
     const next = new Set(checked);
-    if (next.has(name)) next.delete(name);
-    else next.add(name);
-    setChecked(next);
-    call("casual_enable", { names: [...next] }).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+    if (next.has(name)) {
+      next.delete(name);
+      save(next);
+      return;
+    }
+    const blockers = clashes.filter((c) => c.level === "block" && (isSelf(c.a, name) || isSelf(c.b, name)) && sideActive(rivalOf(c, name), checked));
+    if (blockers.length > 0) {
+      setChoice({ name, blockers });
+      return;
+    }
+    next.add(name);
+    save(next);
+  };
+
+  const shownName = (name: string) => addons.find((a) => a.name === name)?.source?.name ?? name;
+  const rivals = choice ? choice.blockers.map((c) => rivalOf(c, choice.name)) : [];
+  const fromCustom = rivals.filter((r) => r.place === "custom");
+  const takeInstead = () => {
+    if (!choice) return;
+    const next = new Set(checked);
+    rivals.forEach((r) => next.delete(r.id));
+    next.add(choice.name);
+    setChoice(undefined);
+    save(next);
   };
 
   const remove = (name: string) => {
@@ -245,6 +294,20 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
                 ))}
               </ul>
             )}
+            {blocks.length > 0 && (
+              <div className="clashes bad" role="alert">
+                <h3>{t("clash.blocked.title")}</h3>
+                <p className="muted">{t("clash.blocked.body")}</p>
+                <ClashList clashes={blocks} />
+              </div>
+            )}
+            {warns.length > 0 && (
+              <div className="clashes">
+                <h3>{t("clash.warn.title")}</h3>
+                <p className="muted">{t("clash.warn.body")}</p>
+                <ClashList clashes={warns} />
+              </div>
+            )}
             {addons.some((a) => a.has_models) && (
               <p className="note">
                 <T k="casual.models.note" />
@@ -285,6 +348,14 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
                     {t("casual.apply.closeGame")}
                   </p>
                 )}
+                {blocks.length > 0 && (
+                  <p>
+                    <Badge tone="block" small>
+                      {t("clash.badge")}
+                    </Badge>{" "}
+                    {t("clash.apply")}
+                  </p>
+                )}
                 {confirm === "apply" ? (
                   <div className="confirm">
                     <p>
@@ -293,7 +364,7 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
                     <div className="row">
                       <button
                         className="btn primary"
-                        disabled={busy || gameRunning}
+                        disabled={busy || gameRunning || blocks.length > 0}
                         onClick={() => start("casual_apply", { path: root, addons: [...checked], options: { quickprecache } })}
                       >
                         {t("casual.apply.confirmButton")}
@@ -317,7 +388,7 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
                   </div>
                 ) : (
                   <div className="row">
-                    <button className="btn primary" disabled={busy || gameRunning || checked.size === 0 || !pending} onClick={() => setConfirm("apply")}>
+                    <button className="btn primary" disabled={busy || gameRunning || checked.size === 0 || !pending || blocks.length > 0} onClick={() => setConfirm("apply")}>
                       {t("casual.apply.button")}
                     </button>
                     <button className="btn flat" disabled={busy || gameRunning || status.game_applied !== true} onClick={() => setConfirm("revert")}>
@@ -378,6 +449,35 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
           </section>
           </div>
         </>
+      )}
+
+      {choice && (
+        <Modal onClose={() => setChoice(undefined)} labelledBy="clash-title">
+          <h2 id="clash-title" className="modal-title">
+            {t("clash.choice.title")}
+          </h2>
+          <p className="clash-choice">{t("clash.choice.body", { name: shownName(choice.name) })}</p>
+          <ClashList clashes={choice.blockers} />
+          {fromCustom.length > 0 ? (
+            <>
+              <p>{t("clash.choice.custom", { names: fromCustom.map((r) => r.name).join(", ") })}</p>
+              <div className="row">
+                <button className="btn primary" onClick={() => setChoice(undefined)}>
+                  {t("common.close")}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="row">
+              <button className="btn primary" disabled={busy} onClick={takeInstead}>
+                {t("clash.choice.take", { name: shownName(choice.name) })}
+              </button>
+              <button className="btn" onClick={() => setChoice(undefined)}>
+                {t("clash.choice.keep", { names: rivals.map((r) => r.name).join(", ") })}
+              </button>
+            </div>
+          )}
+        </Modal>
       )}
 
       <p className="muted small">

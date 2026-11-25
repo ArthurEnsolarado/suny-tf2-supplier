@@ -55,6 +55,14 @@ const RULES: Rule[] = [
   ),
   rule("o arquivo passa do limite de segurança de tamanho ({x})", "the file exceeds the safety size limit ({x})", "el archivo supera el límite de tamaño de seguridad ({x})"),
   rule("o Team Fortress 2 está aberto. Feche o jogo antes de instalar ou remover mods", "Team Fortress 2 is open. Close the game before installing or removing mods", "Team Fortress 2 está abierto. Cierra el juego antes de instalar o quitar mods"),
+  rule(
+    'Conflito: "{a}" ({pa}) e "{b}" ({pb}) trazem os mesmos arquivos ({n}, ex.: {p}). Só um dos dois pode ficar.',
+    'Conflict: "{a}" ({pa}) and "{b}" ({pb}) bring the same files ({n}, e.g. {p}). Only one of them can stay.',
+    'Conflicto: "{a}" ({pa}) y "{b}" ({pb}) traen los mismos archivos ({n}, p. ej.: {p}). Solo uno de los dos puede quedar.',
+  ),
+  rule("no Casual", "in Casual", "en Casual"),
+  rule("em custom", "in custom", "en custom"),
+  rule("novo", "new", "nuevo"),
   rule("nome inválido: {x}", "invalid name: {x}", "nombre no válido: {x}"),
   rule("o GameBanana devolveu uma resposta vazia. Tente de novo em instantes", "GameBanana returned an empty reply. Try again in a moment", "GameBanana devolvió una respuesta vacía. Inténtalo de nuevo en unos instantes"),
 

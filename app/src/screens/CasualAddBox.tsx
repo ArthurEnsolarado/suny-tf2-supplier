@@ -30,10 +30,12 @@ export function CasualAddBox({ kind, modId, installRoot, file, ready, unknown, o
   const [added, setAdded] = useState<string[] | undefined>();
   const [hasModels, setHasModels] = useState(false);
   const [variants, setVariants] = useState(false);
+  const [blockedBy, setBlockedBy] = useState<string[]>([]);
   const { job, track, dismiss } = useJob((j: CasualJob) => {
     onAdded();
     if (j.state === "done") {
-      const r = j.result as { added?: string[]; already_there?: boolean; has_models?: boolean; variants?: boolean } | null;
+      const r = j.result as { added?: string[]; already_there?: boolean; has_models?: boolean; variants?: boolean; blocked_by?: string[] } | null;
+      setBlockedBy(r?.blocked_by ?? []);
       setAdded(r?.added ?? []);
       setHasModels(!!r?.has_models);
       setVariants(!!r?.variants);
@@ -91,7 +93,7 @@ export function CasualAddBox({ kind, modId, installRoot, file, ready, unknown, o
             <Badge tone="ok" small>
               {t("add.inList")}
             </Badge>{" "}
-            {added.length === 0 ? t("add.alreadyThere") : variants ? t("add.variants", { n: added.length }) : t("add.marked", { names: added.join(", ") })}
+            {added.length === 0 ? t("add.alreadyThere") : variants ? t("add.variants", { n: added.length }) : blockedBy.length > 0 ? t("add.blockedBy", { names: blockedBy.join(", ") }) : t("add.marked", { names: added.join(", ") })}
           </p>
           {variants && (
             <ul className="muted small">

@@ -42,9 +42,14 @@ export function ImportMod({ paths, installRoot, gameRunning, icons, casual, onCl
   const [dest, setDest] = useState<"casual" | "custom">("custom");
   const [run, setRun] = useState<Run>({ t: "idle" });
   const [added, setAdded] = useState<string[] | undefined>();
+  const [blockedBy, setBlockedBy] = useState<string[]>([]);
   const { job, track, dismiss } = useJob((j: CasualJob) => {
     casual.onAdded();
-    if (j.state === "done") setAdded((j.result as { added?: string[] } | null)?.added ?? []);
+    if (j.state === "done") {
+      const r = j.result as { added?: string[]; blocked_by?: string[] } | null;
+      setBlockedBy(r?.blocked_by ?? []);
+      setAdded(r?.added ?? []);
+    }
   });
 
   useEffect(() => {
@@ -296,7 +301,7 @@ export function ImportMod({ paths, installRoot, gameRunning, icons, casual, onCl
                   <Badge tone="ok" small>
                     {t("add.inList")}
                   </Badge>{" "}
-                  {added.length === 0 ? t("add.alreadyThere") : t("add.marked", { names: added.join(", ") })}
+                  {added.length === 0 ? t("add.alreadyThere") : blockedBy.length > 0 ? t("add.blockedBy", { names: blockedBy.join(", ") }) : t("add.marked", { names: added.join(", ") })}
                 </p>
                 <p className="muted">
                   {t("add.gameUnchanged")}{" "}

@@ -297,6 +297,11 @@ pub fn list_addons_in(l: &Layout, custom: Option<&Path>) -> Vec<Addon> {
     out
 }
 
+/// Os mods marcados para a próxima aplicação.
+pub fn enabled_names(l: &Layout) -> Vec<String> {
+    load_state(l).enabled
+}
+
 pub fn set_enabled(l: &Layout, names: Vec<String>) -> Result<(), String> {
     let existing: Vec<String> = list_addons(l).into_iter().map(|a| a.name).collect();
     let mut keep: Vec<String> = Vec::new();
@@ -899,7 +904,17 @@ pub async fn add_zip(l: Layout, zip_path: PathBuf, addon_name: String, source: A
         // Um mod novo já entra marcado para a próxima aplicação. Um pacote com VÁRIAS variantes entra desmarcado:
         // elas trocam os mesmos arquivos, então marcar todas seria uma disputa. Quem escolhe é o usuário.
         let variants = changed.len() > 1;
+        // Quem traz os mesmos arquivos que um mod já marcado também entra desmarcado: o usuário escolhe qual fica.
+        let mut blocked_by: Vec<String> = Vec::new();
         if !variants {
+            let mut selected = enabled_names(&l);
+            selected.extend(changed.iter().cloned());
+            let hit = crate::conflicts::casual_block(&l, None, &selected, Some(&changed)).map_err(|e| e.to_string())?;
+            if let Some(c) = hit {
+                blocked_by.extend([c.a, c.b].into_iter().filter(|s| !changed.contains(&s.id)).map(|s| s.name));
+            }
+        }
+        if !variants && blocked_by.is_empty() {
             update_state(&l, |s| {
                 for n in &changed {
                     if !s.enabled.contains(n) {
@@ -909,7 +924,7 @@ pub async fn add_zip(l: Layout, zip_path: PathBuf, addon_name: String, source: A
             })?;
         }
         let has_models = changed.iter().any(|n| dir_has_models(&l.addons_dir().join(n)));
-        Ok(json!({ "added": changed, "message": res["message"], "already_there": changed.is_empty(), "has_models": has_models, "variants": variants }))
+        Ok(json!({ "added": changed, "message": res["message"], "already_there": changed.is_empty(), "has_models": has_models, "variants": variants, "blocked_by": blocked_by }))
     })
     .await
     .map_err(|e| e.to_string())?

@@ -1,9 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { call } from "../api";
-import type { CustomEntry, CustomReport, Inspect, ItemContents, ManagedInfo, Role } from "../types";
+import type { Clash, CustomEntry, CustomReport, Inspect, ItemContents, ManagedInfo, Role } from "../types";
 import { fmtBytes } from "../format";
 import { useI18n } from "../i18n";
 import { Badge, useAsync } from "../ui";
+import { ClashList } from "./Clashes";
 import { Modal } from "./Modal";
 import { ModCard } from "./ModCard";
 
@@ -67,6 +68,9 @@ export function Installed({ inspect, loading, onGoHome, onGoCatalog, onChanged, 
   const root0 = inspect?.installation.root;
   const signature = useMemo(() => (inspect ? inspect.custom.map((e) => `${e.name}:${e.size_bytes}`).join("|") : ""), [inspect]);
   const contents = useAsync<CustomReport | null>(() => (root0 ? call<CustomReport>("custom_report", { path: root0 }).catch(() => null) : Promise.resolve(null)), [root0, signature]);
+  // Itens de custom que mexem na mesma coisa com arquivos diferentes (os de arquivo igual já aparecem na disputa).
+  const found = useAsync<{ clashes: Clash[] } | null>(() => (root0 ? call<{ clashes: Clash[] }>("conflicts", { path: root0 }).catch(() => null) : Promise.resolve(null)), [root0, signature]);
+  const mixes = (found.data?.clashes ?? []).filter((c) => c.level === "warn" && c.a.place === "custom" && c.b.place === "custom");
 
   if (!inspect) {
     return (
@@ -411,6 +415,14 @@ export function Installed({ inspect, loading, onGoHome, onGoCatalog, onChanged, 
               {showAllConflicts ? t("installed.conflicts.less") : t("installed.conflicts.more", { n: report.conflicts.length - 8 })}
             </button>
           )}
+        </section>
+      )}
+
+      {mixes.length > 0 && (
+        <section aria-labelledby="h-mixes">
+          <h2 id="h-mixes">{t("clash.warn.title")}</h2>
+          <p className="muted">{t("clash.warn.body")}</p>
+          <ClashList clashes={mixes} />
         </section>
       )}
 
