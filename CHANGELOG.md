@@ -3,6 +3,14 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## Unreleased
+
+### Changed
+- **The Casual tab now says how to check that the preload ran:** when the game finishes loading, the console opens with a drawing of a cat and *casual particle preloader ACTIVE!!*.
+
+### Fixed
+- **The warnings about models no longer point to the wrong fix.** They suggested QuickPrecache and *Install to custom* for any model mod. QuickPrecache (in Casual Preloader 2.3.1) only picks up map objects such as props, flags, health kits, ammo boxes and MvM bots, chosen by file path, so it doesn't help class animations. The setting is now called *Preload map objects*.
+
 ## 0.11.2
 
 ### Fixed

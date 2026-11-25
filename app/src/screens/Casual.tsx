@@ -369,6 +369,9 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
                 <T k="casual.launch.firstBoot" />
               </li>
               <li>
+                <T k="casual.launch.verify" />
+              </li>
+              <li>
                 <T k="casual.launch.update" />
               </li>
             </ol>

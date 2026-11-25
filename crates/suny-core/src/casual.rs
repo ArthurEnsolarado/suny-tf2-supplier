@@ -211,8 +211,8 @@ pub struct Addon {
     pub size_bytes: u64,
     pub enabled: bool,
     pub source: Option<AddonSource>,
-    /// Tem a pasta `models/`: modelos (armas, cosméticos). No casual eles passam pelo pacote do preloader, que é lido
-    /// ANTES de `custom` e pede pré-carregamento (QuickPrecache) para os modelos aparecerem.
+    /// Tem a pasta `models/`: modelos (armas, cosméticos, animações). No casual eles passam pelo pacote do preloader, que é
+    /// lido ANTES de `custom` e depende do pré-carregamento que roda quando o TF2 abre (`+exec w/config.cfg`).
     pub has_models: bool,
     /// O mesmo item do GameBanana também está instalado em `custom` por este app. A cópia do Casual vence a de `custom`.
     pub also_in_custom: bool,
@@ -919,7 +919,8 @@ pub async fn add_zip(l: Layout, zip_path: PathBuf, addon_name: String, source: A
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct ApplyOptions {
-    /// Pré-carregar modelos (QuickPrecache). Desligado por padrão: só importa para mods de modelo e ainda não foi testado no app.
+    /// QuickPrecache. Desligado por padrão e ainda não testado no app. No preloader 2.3.1 ele só pega modelos de objetos do
+    /// mapa, filtrados pelo caminho (`QUICKPRECACHE_MODEL_LIST`: prop, flag, bots, medkit...); armas e animações não entram.
     #[serde(default)]
     pub quickprecache: bool,
 }
