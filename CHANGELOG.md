@@ -3,7 +3,7 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
-## Unreleased
+## 0.11.3
 
 ### Changed
 - **The Casual tab now says how to check that the preload ran:** when the game finishes loading, the console opens with a drawing of a cat and *casual particle preloader ACTIVE!!*.
