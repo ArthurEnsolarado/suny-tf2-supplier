@@ -3,7 +3,7 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
-## Unreleased
+## 0.14.0
 
 ### Added
 - **The app warns when TF2 starts without the preload.** If casual mods are applied and the running game didn't get *+exec w/config.cfg*, a banner says so, with a restart button and the option ready to copy. Until now the in-game test had only been done with the option typed into Steam by hand, so don't rely on the Play button alone: setting it in Steam is the surest way.
