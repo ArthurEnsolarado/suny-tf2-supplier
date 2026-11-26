@@ -8,6 +8,7 @@ import { Badge, ErrorState, useAsync } from "../ui";
 import { ZOOM_MODES } from "../useUiZoom";
 import { DetectPanel } from "./DetectPanel";
 import { PathForm, PathText } from "./PathForm";
+import { Transparency } from "./Transparency";
 
 interface Props {
   inspect: Inspect | undefined;
@@ -239,6 +240,7 @@ export function Settings({ inspect, pathError, onUsePath, detect, detecting, onD
             <p className="muted small">
               <T k="settings.about.body" />
             </p>
+            <Transparency />
           </section>
         </div>
       </div>

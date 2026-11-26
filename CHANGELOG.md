@@ -3,6 +3,14 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## Unreleased
+
+### Added
+- **Transparency: AI and your data.** *Settings → About* (and the readme) now say how AI was used to make the app, what it uses the internet for, what it reads and changes on your PC, and that it has no account, server, ads or telemetry.
+
+### Fixed
+- **Computers with more than one Steam account:** to know whether *+exec w/config.cfg* was already set, the app skipped an account that had no TF2 launch options and could read another account's. It then showed *Already there* and the Play button did not add the option, so the preload never ran and casual mods such as animations did not work. Only the account in use counts now.
+
 ## 0.13.0
 
 ### Changed

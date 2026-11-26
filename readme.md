@@ -69,6 +69,48 @@ windows might show a SmartScreen warning because the installer isn't code-signed
 - when you press update it downloads the installer, **checks the SHA-256** published with the release and only then opens it. no hash published = it refuses and sends you to the releases page.
 - you can turn the check off in Settings.
 
+## transparency: ai and your data
+
+(the same text is inside the app, in Settings → About, in English, Español and Português.)
+
+### about the use of ai
+
+- this app was made with a lot of help from AI: a coding assistant wrote much of the code. i choose what goes in and publish the versions, and friends help find bugs. there are automated tests, but not everything was tested inside the game, and the code has not had an independent audit.
+- if you send me a screenshot or a bug report, i may use an AI tool to investigate. feel free to crop names and chats before sending.
+- i found no use of AI in the app's code while it runs.
+
+### your data
+
+the app has no account, no server of its own, no ads and no telemetry. it doesn't collect your data for me.
+
+**it uses the internet for:**
+
+- **GameBanana:** the catalog, images and mods. when you open a mod, the app downloads the file (up to 25 MB) to check it, without installing.
+- **GitHub:** looking for an update at startup (you can turn that off in Settings), downloading the installer and the Casual Preloader.
+- **casual libraries:** downloaded while setting it up, normally from PyPI.
+
+as with any website, these services see your IP and may see which program made the request.
+
+**it reads on your pc:**
+
+- the Steam and TF2 folders: to find the game, the mods and the game's images and icons;
+- Steam's local configuration files: to check TF2's launch option;
+- the open programs: to know whether TF2 is open;
+- system version, memory and disk space: to show on the Home screen and give warnings;
+- the files you choose or drag into the app.
+
+**it writes and changes:** (see also *what it touches on your pc*, below)
+
+- mods in `tf/custom`, the app's files, temporary downloads and your preferences;
+- when you apply casual mods, game files are changed by the Casual Preloader. the app keeps a copy of `gameinfo.txt`, and you can revert in the Casual tab;
+- when you ask, it opens TF2 or asks the game to close.
+
+the Casual Preloader is a program by cueki. this description is about the app's code; i haven't audited the preloader.
+
+### my commitment
+
+i don't sell data. if the app ever starts collecting any information, i'll say so beforehand and explain what and why.
+
 ## where the assets come from
 
 - the TF2 banner, logo and the class icons are **read from your own Steam / TF2 install while the app runs**. nothing from Valve is in this repo or in the installer.

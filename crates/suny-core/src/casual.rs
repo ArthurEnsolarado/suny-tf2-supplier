@@ -1072,26 +1072,83 @@ pub async fn revert(l: Layout, tf_dir: PathBuf, rep: Reporter) -> Result<Value, 
 
 // ---------------------------------------------------------------- status
 
-/// Opções de inicialização do TF2 no Steam (só leitura). O casual precisa de `+exec w/config.cfg`.
+/// Opções de inicialização do TF2 no Steam (só leitura), **da conta em uso**. O casual precisa de `+exec w/config.cfg`.
+/// `Some("")` = a conta não tem opção nenhuma; `None` = não deu para saber (o botão Jogar acrescenta o `+exec` mesmo assim).
 pub fn steam_launch_options() -> Option<String> {
-    let steam = crate::steam::steam_dir()?;
-    let users = std::fs::read_dir(steam.join("userdata")).ok()?;
-    let mut best: Option<(SystemTime, String)> = None;
-    for u in users.flatten() {
-        let cfg = u.path().join("config").join("localconfig.vdf");
-        let (Ok(meta), Ok(text)) = (std::fs::metadata(&cfg), std::fs::read_to_string(&cfg)) else { continue };
-        let Some(opts) = vdf_launch_options(&text, "440") else { continue };
-        let at = meta.modified().unwrap_or(UNIX_EPOCH);
-        if best.as_ref().is_none_or(|(t, _)| at > *t) {
-            best = Some((at, opts));
-        }
-    }
-    best.map(|(_, o)| o)
+    launch_options_in(&crate::steam::steam_dir()?)
 }
 
-/// Procura `...\"apps\" { \"<app>\" { \"LaunchOptions\" \"valor\" } }` num VDF do Steam, sem depender de um parser completo.
-fn vdf_launch_options(text: &str, app: &str) -> Option<String> {
-    let mut tokens = Vec::<(bool, String)>::new(); // (é chave/valor?, texto); chaves `{` `}` viram (false, "{"/"}")
+fn launch_options_in(steam: &Path) -> Option<String> {
+    // Só a conta em uso vale. Antes o app pulava quem não tinha opção para o TF2 e acabava lendo a de OUTRA conta do
+    // computador: dizia "já está lá" e o Jogar não passava o `+exec`, então o pré-carregamento nunca rodava.
+    let text = std::fs::read_to_string(active_localconfig(steam)?).ok()?;
+    Some(vdf_launch_options(&text, "440").unwrap_or_default())
+}
+
+/// O `localconfig.vdf` da conta em uso. O Steam marca a conta em `config/loginusers.vdf`; sem esse arquivo, vale o
+/// que foi gravado por último (o Steam regrava o da conta aberta).
+fn active_localconfig(steam: &Path) -> Option<PathBuf> {
+    let of = |user: &Path| user.join("config").join("localconfig.vdf");
+    let users = steam.join("userdata");
+    if let Some(id) = std::fs::read_to_string(steam.join("config").join("loginusers.vdf")).ok().and_then(|t| recent_account(&t)) {
+        // sabemos qual é a conta: se o arquivo dela não existe, não vale usar o de outra
+        return Some(of(&users.join(id.to_string()))).filter(|f| f.is_file());
+    }
+    std::fs::read_dir(users)
+        .ok()?
+        .flatten()
+        .map(|u| of(&u.path()))
+        .filter_map(|f| Some((std::fs::metadata(&f).ok()?.modified().ok()?, f)))
+        .max_by_key(|(at, _)| *at)
+        .map(|(_, f)| f)
+}
+
+/// Diferença entre o SteamID de 64 bits do `loginusers.vdf` e o número da pasta em `userdata`.
+const STEAM_ID_BASE: u64 = 76_561_197_960_265_728;
+
+/// O número da pasta em `userdata` da conta marcada como a mais recente (ou, sem marca, a de login mais novo).
+fn recent_account(loginusers: &str) -> Option<u64> {
+    let tokens = vdf_tokens(loginusers);
+    let mut stack: Vec<String> = Vec::new();
+    let mut best: Option<(bool, u64, u64)> = None; // (mais recente?, quando, conta)
+    let mut now: (bool, u64) = (false, 0);
+    let mut i = 0;
+    while i < tokens.len() {
+        match (&tokens[i], tokens.get(i + 1)) {
+            ((true, key), Some((false, b))) if b == "{" => {
+                stack.push(key.clone());
+                now = (false, 0);
+                i += 2;
+            }
+            ((false, b), _) if b == "}" => {
+                if stack.len() == 2 {
+                    if let Some(account) = stack[1].parse::<u64>().ok().and_then(|id| id.checked_sub(STEAM_ID_BASE)) {
+                        let this = (now.0, now.1, account);
+                        if best.is_none_or(|b| (this.0, this.1) > (b.0, b.1)) {
+                            best = Some(this);
+                        }
+                    }
+                }
+                stack.pop();
+                i += 1;
+            }
+            ((true, key), Some((true, value))) => {
+                if key.eq_ignore_ascii_case("MostRecent") {
+                    now.0 = value == "1";
+                } else if key.eq_ignore_ascii_case("Timestamp") {
+                    now.1 = value.parse().unwrap_or(0);
+                }
+                i += 2;
+            }
+            _ => i += 1,
+        }
+    }
+    best.map(|(_, _, account)| account)
+}
+
+/// Chaves e valores de um VDF do Steam, em ordem: `(true, texto)`; as chaves `{` `}` viram `(false, "{" / "}")`.
+fn vdf_tokens(text: &str) -> Vec<(bool, String)> {
+    let mut tokens = Vec::<(bool, String)>::new();
     let mut chars = text.chars().peekable();
     while let Some(c) = chars.next() {
         match c {
@@ -1123,6 +1180,12 @@ fn vdf_launch_options(text: &str, app: &str) -> Option<String> {
             _ => {}
         }
     }
+    tokens
+}
+
+/// Procura `...\"apps\" { \"<app>\" { \"LaunchOptions\" \"valor\" } }` num VDF do Steam, sem depender de um parser completo.
+fn vdf_launch_options(text: &str, app: &str) -> Option<String> {
+    let tokens = vdf_tokens(text);
     let mut stack: Vec<String> = Vec::new();
     let mut i = 0;
     while i < tokens.len() {
@@ -1351,6 +1414,53 @@ mod tests {
         assert_eq!(extra_launch_args(Some("-novid -windowed")).as_deref(), Some("-novid -windowed +exec w/config.cfg"));
         assert_eq!(extra_launch_args(Some("-novid +exec w/config.cfg")), None);
         assert_eq!(extra_launch_args(Some("+EXEC W/CONFIG.CFG")), None);
+    }
+
+    /// Uma Steam de mentira com contas: (número da pasta, opções do TF2 ou nenhuma).
+    fn fake_steam(tag: &str, accounts: &[(u64, Option<&str>)]) -> PathBuf {
+        let root = tmp(tag);
+        for (id, options) in accounts {
+            let dir = root.join("userdata").join(id.to_string()).join("config");
+            std::fs::create_dir_all(&dir).unwrap();
+            let line = options.map(|o| format!("\"LaunchOptions\" \"{o}\"")).unwrap_or_default();
+            std::fs::write(dir.join("localconfig.vdf"), format!("\"UserLocalConfigStore\" {{ \"Software\" {{ \"Valve\" {{ \"Steam\" {{ \"apps\" {{ \"440\" {{ \"LastPlayed\" \"1\" {line} }} }} }} }} }} }}")).unwrap();
+            std::thread::sleep(Duration::from_millis(30)); // o último gravado fica com a data mais nova
+        }
+        root
+    }
+
+    fn login(root: &Path, users: &[(u64, &str, u64)]) {
+        let body: String = users.iter().map(|(id, recent, at)| format!("\"{}\" {{ \"AccountName\" \"x\" \"MostRecent\" \"{recent}\" \"Timestamp\" \"{at}\" }}\n", STEAM_ID_BASE + id)).collect();
+        std::fs::create_dir_all(root.join("config")).unwrap();
+        std::fs::write(root.join("config").join("loginusers.vdf"), format!("\"users\"\n{{\n{body}}}\n")).unwrap();
+    }
+
+    #[test]
+    fn only_the_account_in_use_counts_for_the_launch_option() {
+        // a conta antiga tem a opção; a que está em uso não tem nenhuma
+        let root = fake_steam("steam_two", &[(222, None), (111, Some("+exec w/config.cfg"))]);
+        login(&root, &[(111, "0", 100), (222, "1", 200)]);
+        let found = launch_options_in(&root);
+        assert_eq!(found.as_deref(), Some(""), "não pode pegar a opção da outra conta");
+        assert_eq!(extra_launch_args(found.as_deref()).as_deref(), Some("+exec w/config.cfg"), "o Jogar precisa acrescentar");
+        // trocando a conta em uso, vale a dela, mesmo com o arquivo mais antigo ou mais novo
+        login(&root, &[(111, "1", 300), (222, "0", 200)]);
+        assert_eq!(launch_options_in(&root).as_deref(), Some("+exec w/config.cfg"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn without_a_mark_the_newest_login_wins_and_without_the_list_the_newest_file() {
+        let root = fake_steam("steam_fallback", &[(111, Some("-antiga")), (222, None)]);
+        assert_eq!(launch_options_in(&root).as_deref(), Some(""), "sem loginusers: o arquivo gravado por último, mesmo sem opção");
+        login(&root, &[(111, "0", 900), (222, "0", 100)]);
+        assert_eq!(launch_options_in(&root).as_deref(), Some("-antiga"), "sem marca: o login mais novo");
+        // a conta em uso é conhecida mas não tem arquivo: não vale o de outra
+        login(&root, &[(333, "1", 1000), (111, "0", 900)]);
+        assert_eq!(launch_options_in(&root), None);
+        let _ = std::fs::remove_dir_all(&root);
+        assert_eq!(launch_options_in(&root), None, "sem Steam não há o que ler");
+        assert_eq!(recent_account("lixo { \"x\""), None);
     }
 
     #[test]
