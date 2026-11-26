@@ -3,7 +3,7 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
-## Unreleased
+## 0.13.1
 
 ### Added
 - **Transparency: AI and your data.** *Settings → About* (and the readme) now say how AI was used to make the app, what it uses the internet for, what it reads and changes on your PC, and that it has no account, server, ads or telemetry.
