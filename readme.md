@@ -95,7 +95,7 @@ as with any website, these services see your IP and may see which program made t
 
 - the Steam and TF2 folders: to find the game, the mods and the game's images and icons;
 - Steam's local configuration files: to check TF2's launch option;
-- the open programs: to know whether TF2 is open;
+- the open programs: to know whether TF2 is open and whether it started with the casual preload (only TF2's own command line);
 - system version, memory and disk space: to show on the Home screen and give warnings;
 - the files you choose or drag into the app.
 

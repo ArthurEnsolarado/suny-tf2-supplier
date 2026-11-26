@@ -221,6 +221,18 @@ pub struct Addon {
     pub also_in_custom: bool,
     /// Quantos grupos de sons variados dá para escolher (`soundpick`).
     pub sound_groups: usize,
+    /// Qual versão do pacote é este item (nome do `.vpk` ou da pasta), quando o autor mandou várias.
+    pub variant: Option<String>,
+}
+
+/// O que distingue este item dos outros do mesmo pacote. O app nomeia o item como o mod; quando o pacote tem várias
+/// versões, a ponte acrescenta ` - <pasta>` ou ` (<nome do .vpk>)`.
+pub fn variant_of(addon: &str, source: Option<&AddonSource>) -> Option<String> {
+    let s = source?;
+    let id = if s.kind == "Local" { s.file_id } else { s.gb_id };
+    let rest = addon.strip_prefix(&crate::installer::slug_parts(&s.kind, &s.name, id))?.trim();
+    let label = rest.strip_prefix("- ").or_else(|| rest.strip_prefix('(').and_then(|r| r.strip_suffix(')')))?.trim();
+    (!label.is_empty()).then(|| label.to_string())
 }
 
 fn dir_has_models(dir: &Path) -> bool {
@@ -286,12 +298,14 @@ pub fn list_addons_in(l: &Layout, custom: Option<&Path>) -> Vec<Addon> {
                 .unwrap_or_else(|| "Unknown".into());
             let source = read_meta(l, &name);
             let also_in_custom = source.as_ref().is_some_and(|s| s.gb_id != 0 && managed.iter().any(|(k, id)| *k == s.kind && *id == s.gb_id));
+            let variant = variant_of(&name, source.as_ref());
             Some(Addon {
                 enabled: state.enabled.contains(&name),
                 source,
                 has_models: dir_has_models(&e.path()),
                 also_in_custom,
                 sound_groups: crate::soundpick::families(l, &name).map_or(0, |f| f.len()),
+                variant,
                 name,
                 kind,
                 file_count: files,
@@ -312,6 +326,7 @@ pub struct InstalledAddon {
     /// O jogo está com ESTA versão dele aplicada.
     pub in_game: bool,
     pub sound_groups: usize,
+    pub variant: Option<String>,
 }
 
 pub fn installed_state(l: &Layout, tf_dir: Option<&Path>, game_applied: bool, kind: &str, gb_id: u64) -> Vec<InstalledAddon> {
@@ -325,6 +340,7 @@ pub fn installed_state(l: &Layout, tf_dir: Option<&Path>, game_applied: bool, ki
             file_id: a.source.as_ref().map_or(0, |s| s.file_id),
             enabled: a.enabled,
             sound_groups: a.sound_groups,
+            variant: a.variant,
             name: a.name,
         })
         .collect()
@@ -1461,6 +1477,21 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         assert_eq!(launch_options_in(&root), None, "sem Steam não há o que ler");
         assert_eq!(recent_account("lixo { \"x\""), None);
+    }
+
+    #[test]
+    fn each_version_of_a_pack_says_which_one_it_is() {
+        let source = AddonSource { kind: "Mod".into(), gb_id: 206352, file_id: 1, file_name: "s.zip".into(), name: "Scout FP Animation Overhaul".into(), version: None, submitter: None, profile_url: String::new(), md5: None, added_at: 0 };
+        let of = |n: &str| variant_of(n, Some(&source));
+        let base = "Scout FP Animation Overhaul (gbm206352)";
+        assert_eq!(of(base), None, "um item só não tem versão");
+        assert_eq!(of(&format!("{base} (scout_fov54)")).as_deref(), Some("scout_fov54"));
+        assert_eq!(of(&format!("{base} - FOV 70 - arms")).as_deref(), Some("FOV 70 - arms"));
+        assert_eq!(of("outro nome qualquer"), None);
+        assert_eq!(variant_of(base, None), None);
+        // mod local: a identidade é o hash, não o id do GameBanana
+        let local = AddonSource { kind: "Local".into(), gb_id: 0, file_id: 0xabc, name: "Meu Pack".into(), ..source.clone() };
+        assert_eq!(variant_of("Meu Pack (local-00000abc) - azul", Some(&local)).as_deref(), Some("azul"));
     }
 
     #[test]

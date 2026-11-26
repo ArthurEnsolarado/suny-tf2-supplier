@@ -271,6 +271,8 @@ export interface InstalledAddon {
   /** O jogo está com esta versão aplicada. */
   in_game: boolean;
   sound_groups: number;
+  /** Qual versão do pacote é, quando o autor mandou várias. */
+  variant: string | null;
 }
 
 /** Tudo que a ficha precisa saber antes de instalar um arquivo. */
@@ -291,6 +293,8 @@ export interface CasualAddon {
   source: CasualSource | null;
   has_models: boolean;
   also_in_custom: boolean;
+  /** Qual versão do pacote é, quando o autor mandou várias. */
+  variant: string | null;
   /** Quantos grupos de sons variados dá para escolher. */
   sound_groups: number;
 }

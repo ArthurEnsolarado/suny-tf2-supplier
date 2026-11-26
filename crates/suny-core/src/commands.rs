@@ -822,8 +822,11 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
         "game_state" => {
             let p: GameStateArgs = args(a)?;
             tokio::task::spawn_blocking(move || {
-                let root = p.path.and_then(|s| resolve(&s).ok()).map(|i| i.root);
-                json!({ "running": system::game_running(root.as_deref()) })
+                let found = p.path.and_then(|s| resolve(&s).ok());
+                let (running, preload) = system::game_and_preload(found.as_ref().map(|i| i.root.as_path()));
+                // o jogo está com os mods do casual aplicados, mas abriu sem mandar carregá-los
+                let no_preload = preload == Some(false) && found.as_ref().is_some_and(|i| library::preloader_state(i).applied());
+                json!({ "running": running, "no_preload": no_preload })
             })
             .await
             .map_err(|e| e.to_string())

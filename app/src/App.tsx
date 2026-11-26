@@ -50,13 +50,18 @@ function writeStored(key: string, value: string | null) {
 }
 
 /** Pergunta ao núcleo, a cada poucos segundos, se o TF2 está aberto. Barato: só olha os processos. */
-function useGameRunning(path: string | undefined): boolean {
+function useGameState(path: string | undefined): { running: boolean; noPreload: boolean } {
   const [running, setRunning] = useState(false);
+  const [noPreload, setNoPreload] = useState(false);
   useEffect(() => {
     let alive = true;
     const tick = () =>
-      call<{ running: boolean }>("game_state", { path: path ?? null }).then(
-        (r) => alive && setRunning(r.running),
+      call<{ running: boolean; no_preload?: boolean }>("game_state", { path: path ?? null }).then(
+        (r) => {
+          if (!alive) return;
+          setRunning(r.running);
+          setNoPreload(!!r.no_preload);
+        },
         () => undefined,
       );
     tick();
@@ -66,7 +71,7 @@ function useGameRunning(path: string | undefined): boolean {
       clearInterval(timer);
     };
   }, [path]);
-  return running;
+  return { running, noPreload };
 }
 
 export function App() {
@@ -146,7 +151,13 @@ export function App() {
   const casual = useAsync<CasualStatus>(() => call<CasualStatus>("casual_status", { path }), [path]);
 
   // Estado do jogo ao vivo. Quando abre ou fecha, o resto da tela se atualiza sozinho.
-  const running = useGameRunning(path);
+  const { running, noPreload } = useGameState(path);
+  // o aviso de "abriu sem pré-carregamento" volta a valer na próxima vez que o jogo abrir
+  const [preloadHidden, setPreloadHidden] = useState(false);
+  const [optionCopied, setOptionCopied] = useState(false);
+  useEffect(() => {
+    if (!running) setPreloadHidden(false);
+  }, [running]);
   const first = useRef(true);
   const { reload: reloadInspect } = inspect;
   const { reload: reloadCasual } = casual;
@@ -230,6 +241,25 @@ export function App() {
         </div>
       </header>
       <main className="sheet">
+        {noPreload && !preloadHidden && (
+          <div className="preload-banner" role="alert">
+            <p>
+              <T k="preload.banner" />
+            </p>
+            <span className="update-banner-actions">
+              <RestartButton path={path} />
+              <button
+                className="btn flat mini"
+                onClick={() => navigator.clipboard?.writeText("+exec w/config.cfg").then(() => setOptionCopied(true), () => setOptionCopied(false))}
+              >
+                {optionCopied ? t("common.copied") : t("casual.launch.copy", { opt: "+exec w/config.cfg" })}
+              </button>
+              <button className="btn flat mini" onClick={() => setPreloadHidden(true)}>
+                {t("preload.ignore")}
+              </button>
+            </span>
+          </div>
+        )}
         {showBanner && (
           <div className="update-banner" role="status">
             <span>

@@ -26,8 +26,14 @@ fn is_tf2_process(name: &str, exe: Option<&Path>, cmd: &[String], root: Option<&
     in_root || game_tf
 }
 
-/// PIDs dos processos do TF2 que estão abertos agora.
-fn tf2_pids(game_root: Option<&Path>) -> Vec<u32> {
+/// A linha de comando do jogo manda rodar o config do preloader (`+exec w/config.cfg`)?
+fn cmd_runs_preload(cmd: &[String]) -> bool {
+    let line = cmd.join(" ").to_ascii_lowercase().replace('\\', "/").replace('"', "");
+    line.split_whitespace().collect::<Vec<_>>().windows(2).any(|w| w[0] == "+exec" && matches!(w[1], "w/config.cfg" | "w/config"))
+}
+
+/// O TF2 aberto agora: (PID, linha de comando).
+fn tf2_processes(game_root: Option<&Path>) -> Vec<(u32, Vec<String>)> {
     let mut sys = System::new();
     sys.refresh_processes_specifics(
         ProcessesToUpdate::All,
@@ -36,12 +42,23 @@ fn tf2_pids(game_root: Option<&Path>) -> Vec<u32> {
     );
     sys.processes()
         .iter()
-        .filter(|(_, p)| {
+        .filter_map(|(pid, p)| {
             let cmd: Vec<String> = p.cmd().iter().map(|c| c.to_string_lossy().into_owned()).collect();
-            is_tf2_process(&p.name().to_string_lossy(), p.exe(), &cmd, game_root)
+            is_tf2_process(&p.name().to_string_lossy(), p.exe(), &cmd, game_root).then(|| (pid.as_u32(), cmd))
         })
-        .map(|(pid, _)| pid.as_u32())
         .collect()
+}
+
+fn tf2_pids(game_root: Option<&Path>) -> Vec<u32> {
+    tf2_processes(game_root).into_iter().map(|(pid, _)| pid).collect()
+}
+
+/// O jogo está aberto? E, se está, recebeu o `+exec w/config.cfg`? `None` = fechado, ou o sistema não deixou ver a
+/// linha de comando (na dúvida o app não acusa nada). Só a linha de comando do próprio TF2 é olhada.
+pub fn game_and_preload(game_root: Option<&Path>) -> (bool, Option<bool>) {
+    let found = tf2_processes(game_root);
+    let seen: Vec<&Vec<String>> = found.iter().map(|(_, c)| c).filter(|c| !c.is_empty()).collect();
+    (!found.is_empty(), (!seen.is_empty()).then(|| seen.iter().any(|c| cmd_runs_preload(c))))
 }
 
 fn tf2_is_running(game_root: Option<&Path>) -> bool {
@@ -134,6 +151,17 @@ fn free_space_mb(path: &Path) -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_command_line_says_whether_the_preload_config_was_asked_for() {
+        let cmd = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        for yes in [&["tf_win64.exe", "-steam", "-game", "tf", "+exec", "w/config.cfg"][..], &["hl2.exe", "+EXEC", "W\\Config.cfg"][..], &["tf_win64.exe -novid +exec w/config.cfg -condebug"][..], &["tf.exe", "+exec", "\"w/config\""][..]] {
+            assert!(super::cmd_runs_preload(&cmd(yes)), "{yes:?}");
+        }
+        for no in [&["tf_win64.exe", "-steam", "-game", "tf"][..], &["tf_win64.exe", "+exec", "autoexec.cfg"][..], &["tf_win64.exe", "w/config.cfg"][..], &[][..]] {
+            assert!(!super::cmd_runs_preload(&cmd(no)), "{no:?}");
+        }
+    }
+
     use super::*;
 
     #[test]

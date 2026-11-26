@@ -3,6 +3,15 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## Unreleased
+
+### Added
+- **The app warns when TF2 starts without the preload.** If casual mods are applied and the running game didn't get *+exec w/config.cfg*, a banner says so, with a restart button and the option ready to copy. Until now the in-game test had only been done with the option typed into Steam by hand, so don't rely on the Play button alone: setting it in Steam is the surest way.
+
+### Fixed
+- **Packs with several versions** now say which version each item is (the `.vpk` or folder name the author used), in the Casual cards and in conflict lists. The install panel asks which version you want and keeps only that one in your list; *Apply to the game* no longer tries to tick every version at once.
+- **English wording:** "Doesn't fight with any mod you use" is now "No conflicts with the mods you're using", along with a few other literal translations (*File conflicts*, *Remove*, *Removed on next apply*).
+
 ## 0.13.1
 
 ### Added

@@ -9,6 +9,7 @@ import { AUTO_ANALYZE_MAX, SUPPORTED } from "./Analyzer";
 import { JobBar } from "./JobBar";
 import { RestartButton } from "./RestartButton";
 import { SoundPicker } from "./SoundPicker";
+import { VersionPicker } from "./VersionPicker";
 
 export interface CasualLink {
   ready: boolean;
@@ -48,7 +49,7 @@ type Run =
   | { t: "idle" }
   | { t: "running"; steps: StepId[]; at: number; job?: CasualJob }
   | { t: "done"; dest: Dest; applied: boolean; out?: InstallOutcome }
-  | { t: "variants" }
+  | { t: "versions"; apply: boolean; drop: string[] }
   | { t: "failed"; msg: string; job?: CasualJob };
 
 type Level = "ok" | "warn" | "block" | "info" | "wait";
@@ -155,6 +156,8 @@ export function Installer({ installRoot, kind, modId, modName, files, gameRunnin
 
   const mine = d?.in_casual ?? [];
   const sameFile = mine.filter((a) => a.file_id === file.id);
+  // "no jogo" é: o que está marcado está aplicado (versões desmarcadas não contam)
+  const inGame = sameFile.some((a) => a.enabled) && sameFile.filter((a) => a.enabled).every((a) => a.in_game);
   const running = run.t === "running";
   // quem já tem o mod vê o que fazer com ele; a conferência e o botão de instalar voltam só se pedir
   const have = sameFile.length > 0 || !!d?.in_custom;
@@ -199,7 +202,7 @@ export function Installer({ installRoot, kind, modId, modName, files, gameRunnin
       const job = await waitJob(first, (j) => setRun({ t: "running", steps, at: 0, job: j }));
       if (job.state !== "done") return finish({ t: "failed", msg: job.error ?? "", job });
       const r = job.result as { added?: string[]; variants?: boolean } | null;
-      if (r?.variants) return finish({ t: "variants" }); // várias versões do mesmo mod: só a pessoa sabe qual quer
+      if (r?.variants) return finish({ t: "versions", apply, drop }); // várias versões do mesmo mod: só a pessoa sabe qual quer
       let added = r?.added ?? [];
       if (added.length === 0) {
         const again = await call<PreparedFile>("prepare_file", { path: installRoot ?? null, kind, id: modId, file_id: file.id });
@@ -211,9 +214,27 @@ export function Installer({ installRoot, kind, modId, modName, files, gameRunnin
     }
   };
 
+  // fica na lista só a versão escolhida (as outras trocam os mesmos arquivos); depois segue o caminho de sempre
+  const useVersions = async (chosen: string[], apply: boolean, drop: string[]) => {
+    const steps: StepId[] = apply ? ["enable", "apply"] : ["enable"];
+    setRun({ t: "running", steps, at: 0 });
+    try {
+      for (const other of sameFile.filter((a) => !chosen.includes(a.name))) {
+        await call("casual_remove", { name: other.name });
+      }
+      await enableAndApply(chosen, drop, apply, steps);
+    } catch (e) {
+      finish({ t: "failed", msg: errorText(e) });
+    }
+  };
+
+  // várias versões na lista e nenhuma marcada: falta escolher; com alguma marcada, valem as marcadas
+  const undecided = sameFile.length > 1 && !sameFile.some((a) => a.enabled);
+
   const applyExisting = () => {
+    const marked = sameFile.filter((a) => a.enabled);
     enableAndApply(
-      sameFile.map((a) => a.name),
+      (marked.length > 0 ? marked : sameFile).map((a) => a.name),
       casualRivals.map((c) => c.b.id),
       true,
       ["enable", "apply"],
@@ -328,11 +349,23 @@ export function Installer({ installRoot, kind, modId, modName, files, gameRunnin
         </div>
       )}
 
-      {sameFile.length > 0 && run.t === "idle" && (
-        <div className={`state-card ${sameFile.every((a) => a.in_game) ? "good" : ""}`} role="status">
-          <b>{sameFile.every((a) => a.in_game) ? t("flow.have.inGame") : sameFile.some((a) => a.enabled) ? t("flow.have.pending") : t("flow.have.off")}</b>
+      {undecided && (run.t === "idle" || run.t === "versions") && (
+        <VersionPicker
+          versions={sameFile}
+          canApply={!!installRoot && !gameRunning && customRivals.length === 0}
+          applyWanted={run.t === "versions" ? run.apply : applyNow}
+          onUse={(chosen, apply) => void useVersions(chosen, apply, run.t === "versions" ? run.drop : casualRivals.map((c) => c.b.id))}
+        />
+      )}
+
+      {sameFile.length > 0 && !undecided && run.t === "idle" && (
+        <div className={`state-card ${inGame ? "good" : ""}`} role="status">
+          <b>{inGame ? t("flow.have.inGame") : sameFile.some((a) => a.enabled) ? t("flow.have.pending") : t("flow.have.off")}</b>
+          {sameFile.some((a) => a.variant) && (
+            <p className="muted small">{t("casual.version", { name: sameFile.filter((a) => a.enabled).map((a) => a.variant ?? a.name).join(", ") || "—" })}</p>
+          )}
           <div className="row">
-            {sameFile.every((a) => a.in_game) ? (
+            {inGame ? (
               playButton
             ) : (
               <button className="btn primary" disabled={!installRoot || gameRunning || customRivals.length > 0} onClick={applyExisting}>
@@ -344,7 +377,7 @@ export function Installer({ installRoot, kind, modId, modName, files, gameRunnin
               {t("flow.seeCasual")}
             </button>
           </div>
-          {gameRunning && !sameFile.every((a) => a.in_game) && <p className="muted small">{t("casual.apply.closeGame")}</p>}
+          {gameRunning && !inGame && <p className="muted small">{t("casual.apply.closeGame")}</p>}
         </div>
       )}
       {d?.in_custom && run.t === "idle" && (
@@ -475,17 +508,6 @@ export function Installer({ installRoot, kind, modId, modName, files, gameRunnin
                 {t("flow.seeCasual")}
               </button>
             )}
-          </div>
-        </div>
-      )}
-
-      {run.t === "variants" && (
-        <div className="state-card" role="status">
-          <b>{t("flow.variants")}</b>
-          <div className="row">
-            <button className="btn primary" onClick={casual.onGo}>
-              {t("add.openCasual")}
-            </button>
           </div>
         </div>
       )}

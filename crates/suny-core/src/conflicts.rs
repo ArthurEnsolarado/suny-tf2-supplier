@@ -489,7 +489,9 @@ pub fn casual_mods(l: &casual::Layout) -> Vec<ModFiles> {
     casual::list_addons(l)
         .into_iter()
         .map(|a| {
-            let shown = a.source.as_ref().map(|s| s.name.clone()).unwrap_or_else(|| a.name.clone());
+            let base = a.source.as_ref().map(|s| s.name.clone()).unwrap_or_else(|| a.name.clone());
+            // duas versões do mesmo pacote precisam aparecer com nomes diferentes na lista de conflitos
+            let shown = a.variant.as_ref().map_or_else(|| base.clone(), |v| format!("{base} [{v}]"));
             let mut m = ModFiles::new(a.name.clone(), shown, Place::Casual);
             m.origin = a.source.as_ref().filter(|s| s.gb_id != 0).map(|s| format!("{}:{}", s.kind, s.gb_id));
             // variantes do mesmo pacote têm o mesmo nome de origem: o nome da pasta diz qual é qual

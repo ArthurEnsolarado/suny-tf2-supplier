@@ -122,7 +122,11 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
     save(next);
   };
 
-  const shownName = (name: string) => addons.find((a) => a.name === name)?.source?.name ?? name;
+  const shownName = (name: string) => {
+    const a = addons.find((x) => x.name === name);
+    const base = a?.source?.name ?? name;
+    return a?.variant ? `${base} [${a.variant}]` : base;
+  };
   const rivals = choice ? choice.blockers.map((c) => rivalOf(c, choice.name)) : [];
   const fromCustom = rivals.filter((r) => r.place === "custom");
   const takeInstead = () => {
@@ -249,6 +253,7 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
                     subtitle={a.source?.submitter ? t("common.by", { who: a.source.submitter }) : a.source ? (a.source.kind === "Local" ? t("installed.local") : undefined) : t("casual.list.external")}
                     meta={
                       <>
+                        {a.variant && <span className="version-name">{t("casual.version", { name: a.variant })}</span>}
                         {`${t("files", { n: a.file_count })} · ${fmtBytes(a.size_bytes)}`}
                         {(a.has_models || a.also_in_custom) && (
                           <span className="card-tags">
