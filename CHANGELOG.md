@@ -3,7 +3,7 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
-## Unreleased
+## 0.13.0
 
 ### Changed
 - **Installing from the catalog is now one panel and one button.** Opening a mod checks the file by itself (files above 25 MB wait for a click) and says in plain words whether it can be installed: antivirus, whether the paths work in casual, and which of your mods it would fight with, *before* you install. The destination comes pre-selected with the recommended one. In Casual, one button downloads, adds, ticks and applies the mod, showing each step; *Apply to the game too* can be turned off, and when the new mod brings the same files as a ticked one the button offers to swap them. When it ends there's a *Play* button. If you already have the mod, the page says so and offers what makes sense (apply, play, choose sounds). The separate *Analyze file* button and the extra confirmation for `custom` are gone.
