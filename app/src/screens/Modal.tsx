@@ -8,6 +8,8 @@ export function Modal({ children, onClose, labelledBy }: { children: ReactNode; 
     const previous = document.activeElement as HTMLElement | null;
     ref.current?.focus();
     const onKey = (e: KeyboardEvent) => {
+      const open = document.querySelectorAll(".modal-backdrop");
+      if (open[open.length - 1] !== ref.current?.parentElement) return; // há outra janela por cima
       if (e.key === "Escape") {
         if (document.querySelector(".lightbox")) return; // o zoom da imagem trata o próprio Esc
         onClose();

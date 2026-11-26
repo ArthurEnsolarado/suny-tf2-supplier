@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { call } from "../api";
-import { fmtBytes, fmtDate, fmtInt } from "../format";
+import { fmtDate, fmtInt } from "../format";
 import { useI18n, type TKey } from "../i18n";
 import type { Category, Details, GameIcons, Kind, Page, Sort, Summary } from "../types";
 import { Badge, ErrorState, Icon, useAsync } from "../ui";
 import { CatGlyph } from "../catIcons";
 import { useSoundPreview } from "../useSoundPreview";
-import { Analyzer, AUTO_ANALYZE_MAX } from "./Analyzer";
-import { InstallPanel, type CasualLink } from "./InstallPanel";
-import { SUPPORTED } from "./InstallBox";
+import { Analyzer, AUTO_ANALYZE_MAX, SUPPORTED } from "./Analyzer";
+import { Installer, type CasualLink } from "./Installer";
 import { Modal } from "./Modal";
 
 /** Itens pedidos por vez. A grade tem 5 colunas, então 25 fecha 5 linhas. */
@@ -662,34 +661,20 @@ function Ficha({
                   <b>{fmtInt(d.data.view_count)}</b> {t("ficha.views")}
                 </span>
               </div>
-              <h3>{t("ficha.files", { n: d.data.files.length })}</h3>
-              {d.data.files.length === 0 && <p className="muted">{t("ficha.noFiles")}</p>}
-              {d.data.files.map((f) => {
-                const exe = f.analysis_warnings && "contains_exe" in f.analysis_warnings;
-                return (
-                  <div className="file" key={f.id}>
-                    <span className="legend">{f.file_name}</span>
-                    <b>{fmtBytes(f.size)}</b>
-                    <div>
-                      {t("ficha.antivirus")} <b>{f.av_result ?? t("ficha.noResult")}</b>
-                    </div>
-                    {exe && (
-                      <p>
-                        <Badge tone="block" small>
-                          {t("ficha.hasExe")}
-                        </Badge>
-                      </p>
-                    )}
-                    {f.md5 && (
-                      <div>
-                        <code>MD5 {f.md5}</code>
-                      </div>
-                    )}
-                    <Analyzer key={`a${f.id}`} installRoot={installRoot} kind={kind} modId={id} file={f} icons={icons} hideSounds={soundFile?.id === f.id} />
-                    <InstallPanel key={f.id} installRoot={installRoot} kind={kind} modId={id} file={f} gameRunning={gameRunning} casual={casual} isMap={isMap} onChanged={onChanged} />
-                  </div>
-                );
-              })}
+              <Installer
+                key={`${kind}${id}`}
+                installRoot={installRoot}
+                kind={kind}
+                modId={id}
+                modName={d.data.name}
+                files={d.data.files}
+                gameRunning={gameRunning}
+                casual={casual}
+                isMap={isMap}
+                icons={icons}
+                soundsShownFor={soundFile?.id}
+                onChanged={onChanged}
+              />
 
               <dl className="ficha-dl">
                 <dt>{t("ficha.author")}</dt>

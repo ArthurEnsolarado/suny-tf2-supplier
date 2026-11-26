@@ -47,6 +47,8 @@ const ICONS = {
   casual: Gamepad2,
   installed: PackageCheck,
   settings: Settings,
+  warn: TriangleAlert,
+  info: Info,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

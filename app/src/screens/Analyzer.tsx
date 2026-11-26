@@ -4,7 +4,6 @@ import { useI18n } from "../i18n";
 import type { Analysis, FileInfo, GameIcons, Kind } from "../types";
 import { Icon } from "../ui";
 import { AnalysisView } from "./AnalysisView";
-import { SUPPORTED } from "./InstallBox";
 
 type Phase = { t: "idle" } | { t: "busy" } | { t: "done"; a: Analysis } | { t: "error"; msg: string };
 
@@ -22,7 +21,10 @@ interface Props {
   hideSounds?: boolean;
 }
 
-/** Arquivos até este tamanho são analisados sozinhos na ficha de um som. */
+/** Formatos que o app instala. */
+export const SUPPORTED = ["zip", "rar", "7z"];
+
+/** Arquivos até este tamanho são analisados sozinhos. */
 export const AUTO_ANALYZE_MAX = 25 << 20;
 
 /** Baixa o arquivo (só quando o usuário clica) e mostra o que ele muda, a compatibilidade e deixa ouvir os sons. Não instala nada. */

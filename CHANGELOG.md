@@ -3,6 +3,17 @@
 Every stable release shows up inside the app (Settings → Updates) with the notes from here.
 Format: newest first. Versions follow `major.minor.patch`.
 
+## Unreleased
+
+### Changed
+- **Installing from the catalog is now one panel and one button.** Opening a mod checks the file by itself (files above 25 MB wait for a click) and says in plain words whether it can be installed: antivirus, whether the paths work in casual, and which of your mods it would fight with, *before* you install. The destination comes pre-selected with the recommended one. In Casual, one button downloads, adds, ticks and applies the mod, showing each step; *Apply to the game too* can be turned off, and when the new mod brings the same files as a ticked one the button offers to swap them. When it ends there's a *Play* button. If you already have the mod, the page says so and offers what makes sense (apply, play, choose sounds). The separate *Analyze file* button and the extra confirmation for `custom` are gone.
+
+### Added
+- **Choose which sound plays.** A Casual mod that ships numbered variations (like the three shield impact sounds) has a *Choose sounds* button. For each group you can listen to every file and keep the random draw as the pack came, always play one of them (the app puts it in every slot of the draw), or leave that group with the original TF2 sound. The pack's original files are kept, so you can go back, and the game only changes when you apply again.
+
+### Fixed
+- **"Could not find EOCD" when opening a catalog file.** The file page can analyze a sound pack by itself when it opens, and a second request (Analyze, preview or Add to Casual) could read the download while it was still half written. Downloads are now assembled aside and only appear when complete, one request at a time for each file.
+
 ## 0.12.0
 
 ### Added

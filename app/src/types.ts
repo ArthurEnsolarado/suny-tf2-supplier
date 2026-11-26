@@ -253,6 +253,35 @@ export interface Clash {
   objects: { kind: "weapon" | "cosmetic" | "player" | "hud" | "sound"; name: string }[];
 }
 
+/** Um grupo de sons numerados que o jogo sorteia. */
+export interface SoundFamily {
+  key: string;
+  /** Pasta dentro de `sound/` mais o nome sem o número. */
+  name: string;
+  options: { file: string; name: string; size: number }[];
+  /** `random`, `original` ou o `file` escolhido. */
+  choice: string;
+}
+
+/** Um mod do casual que veio deste item do GameBanana. */
+export interface InstalledAddon {
+  name: string;
+  file_id: number;
+  enabled: boolean;
+  /** O jogo está com esta versão aplicada. */
+  in_game: boolean;
+  sound_groups: number;
+}
+
+/** Tudo que a ficha precisa saber antes de instalar um arquivo. */
+export interface PreparedFile {
+  analysis: Analysis;
+  /** Com quem o arquivo brigaria; ele é sempre o lado `a`. */
+  clashes: Clash[];
+  in_casual: InstalledAddon[];
+  in_custom: boolean;
+}
+
 export interface CasualAddon {
   name: string;
   kind: string;
@@ -262,6 +291,8 @@ export interface CasualAddon {
   source: CasualSource | null;
   has_models: boolean;
   also_in_custom: boolean;
+  /** Quantos grupos de sons variados dá para escolher. */
+  sound_groups: number;
 }
 
 export interface CasualJob {
@@ -285,6 +316,8 @@ export interface CasualStatus {
   addons: CasualAddon[];
   /** O que o app aplicou nesta instalação do jogo (pode estar desatualizado se o jogo foi restaurado por fora). */
   applied_here: { addons: string[]; at: number; preloader_version: string } | null;
+  /** Mods cujo conteúdo mudou (escolha de sons) desde a última aplicação. */
+  changed: string[];
   /** O jogo está com o preloader de verdade (gameinfo e VPK). */
   game_applied: boolean | null;
   launch_options: string | null;

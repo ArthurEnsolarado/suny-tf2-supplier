@@ -19,6 +19,7 @@ pub mod logs;
 pub mod replaces;
 pub mod remotezip;
 pub mod scanner;
+pub mod soundpick;
 pub mod steam;
 pub mod system;
 pub mod update;

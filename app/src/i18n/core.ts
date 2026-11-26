@@ -63,6 +63,10 @@ const RULES: Rule[] = [
   rule("no Casual", "in Casual", "en Casual"),
   rule("em custom", "in custom", "en custom"),
   rule("novo", "new", "nuevo"),
+  rule("esse som não faz parte deste mod", "that sound isn't part of this mod", "ese sonido no forma parte de este mod"),
+  rule("esse som não faz parte deste grupo", "that sound isn't part of this group", "ese sonido no forma parte de este grupo"),
+  rule("esse grupo de sons não existe neste mod", "that sound group doesn't exist in this mod", "ese grupo de sonidos no existe en este mod"),
+  rule("este som é grande demais para a prévia", "this sound is too big to preview", "este sonido es demasiado grande para la vista previa"),
   rule("nome inválido: {x}", "invalid name: {x}", "nombre no válido: {x}"),
   rule("o GameBanana devolveu uma resposta vazia. Tente de novo em instantes", "GameBanana returned an empty reply. Try again in a moment", "GameBanana devolvió una respuesta vacía. Inténtalo de nuevo en unos instantes"),
 

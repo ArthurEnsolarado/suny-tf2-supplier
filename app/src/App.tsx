@@ -199,7 +199,7 @@ export function App() {
   // "Já tenho este mod": arquivos e pastas escolhidos, colados ou soltos na janela abrem a janela de importar.
   const [importPaths, setImportPaths] = useState<string[] | undefined>();
   const dropping = useFileDrop((paths) => setImportPaths(paths));
-  const casualLink = { ready: casual.data?.runtime === "ready", unknown: !casual.data, onGo: () => go("casual"), onAdded: casual.reload };
+  const casualLink = { ready: casual.data?.runtime === "ready", unknown: !casual.data, quickprecache, onGo: () => go("casual"), onGoInstalled: () => go("installed"), onAdded: casual.reload };
 
   return (
     <div className="app">
@@ -275,7 +275,7 @@ export function App() {
               portraits={portraits.data?.icons ?? {}}
               onChanged={inspect.reload}
               gameRunning={running}
-              casual={{ ready: casual.data?.runtime === "ready", unknown: !casual.data, onGo: () => go("casual"), onAdded: casual.reload }}
+              casual={casualLink}
             />
           </div>
         )}

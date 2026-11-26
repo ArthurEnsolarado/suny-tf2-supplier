@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 use crate::gamebanana::{Client, Kind, Query, Sort};
 use crate::steam::Installation;
 use crate::installer::{self, ModMeta};
-use crate::{analysis, archive, art, casual, conflicts, contents, gameicons, library, localmod, steam, system, update, vanilla, Error};
+use crate::{analysis, archive, art, casual, conflicts, contents, gameicons, library, localmod, soundpick, steam, system, update, vanilla, Error};
 
 #[derive(Deserialize)]
 struct ListArgs {
@@ -138,6 +138,19 @@ struct CasualNameArgs {
 }
 
 #[derive(Deserialize)]
+struct SoundChooseArgs {
+    name: String,
+    family: String,
+    choice: String,
+}
+
+#[derive(Deserialize)]
+struct SoundPlayArgs {
+    name: String,
+    file: String,
+}
+
+#[derive(Deserialize)]
 struct CasualNamesArgs {
     /// Raiz do TF2 (opcional): para comparar também com o que está em custom.
     path: Option<String>,
@@ -217,29 +230,59 @@ fn prune_cache(dir: &Path, keep: &Path) {
     }
 }
 
-/// Baixa o arquivo do GameBanana e entrega sempre um `.zip` em `dest_zip`.
-/// `.rar` e `.7z` são baixados para um arquivo temporário e convertidos pelo programa que existir no computador.
+/// Um pedido por vez para cada arquivo do cache: a ficha analisa sozinha ao abrir, e Analisar, a prévia ou "Adicionar
+/// ao casual" podem pedir o mesmo arquivo ao mesmo tempo.
+fn file_lock(path: &Path) -> std::sync::Arc<tokio::sync::Mutex<()>> {
+    static LOCKS: std::sync::Mutex<Option<std::collections::HashMap<PathBuf, std::sync::Arc<tokio::sync::Mutex<()>>>>> = std::sync::Mutex::new(None);
+    let mut all = LOCKS.lock().unwrap_or_else(|p| p.into_inner());
+    all.get_or_insert_with(Default::default).entry(path.to_path_buf()).or_default().clone()
+}
+
+/// Onde o arquivo é montado antes de ficar pronto.
+fn partial_path(dest_zip: &Path) -> PathBuf {
+    dest_zip.with_extension("part")
+}
+
+/// Baixa o arquivo do GameBanana e entrega sempre um `.zip` em `dest_zip`. Se ele já está lá, não faz nada.
+/// `dest_zip` só aparece **inteiro**: o download (e a conversão de `.rar`/`.7z`) acontece ao lado e é renomeado no fim.
+/// Antes disso, um segundo pedido via o arquivo pela metade e dava "Could not find EOCD".
 async fn fetch_as_zip(client: &Client, file: &crate::gamebanana::FileInfo, dest_zip: &Path, max_bytes: u64) -> Result<(), String> {
-    let fmt = archive::format_of(&file.file_name).ok_or_else(|| Error::UnsupportedFormat(file.file_name.clone()).to_string())?;
-    if fmt == archive::Format::Zip {
-        client.download_to(file, dest_zip, max_bytes).await.map_err(|e| e.to_string())?;
-        return Ok(());
+    let lock = file_lock(dest_zip);
+    let _turn = lock.lock().await;
+    if dest_zip.is_file() {
+        return Ok(()); // outro pedido terminou enquanto este esperava
     }
-    if archive::extractors_for(fmt).is_empty() {
-        return Err(Error::NoExtractor(fmt.label().to_string()).to_string());
+    let part = partial_path(dest_zip);
+    let made: Result<(), String> = async {
+        let fmt = archive::format_of(&file.file_name).ok_or_else(|| Error::UnsupportedFormat(file.file_name.clone()).to_string())?;
+        if fmt == archive::Format::Zip {
+            client.download_to(file, &part, max_bytes).await.map_err(|e| e.to_string())?;
+        } else {
+            if archive::extractors_for(fmt).is_empty() {
+                return Err(Error::NoExtractor(fmt.label().to_string()).to_string());
+            }
+            let original = dest_zip.with_extension(fmt.label().trim_start_matches('.'));
+            client.download_to(file, &original, max_bytes).await.map_err(|e| e.to_string())?;
+            let (src, dest) = (original.clone(), part.clone());
+            let res = tokio::task::spawn_blocking(move || archive::convert_to_zip(&src, fmt, &dest)).await.map_err(|e| e.to_string())?;
+            let _ = std::fs::remove_file(&original); // o arquivo original nunca fica no computador
+            res.map_err(|e| e.to_string())?;
+        }
+        std::fs::rename(&part, dest_zip).map_err(|e| Error::io(dest_zip, e).to_string())
     }
-    let original = dest_zip.with_extension(fmt.label().trim_start_matches('.'));
-    client.download_to(file, &original, max_bytes).await.map_err(|e| e.to_string())?;
-    let (src, dest) = (original.clone(), dest_zip.to_path_buf());
-    let res = tokio::task::spawn_blocking(move || archive::convert_to_zip(&src, fmt, &dest)).await.map_err(|e| e.to_string())?;
-    let _ = std::fs::remove_file(&original); // o arquivo original nunca fica no computador
-    res.map(|_| ()).map_err(|e| e.to_string())
+    .await;
+    if made.is_err() {
+        let _ = std::fs::remove_file(&part);
+    }
+    made
 }
 
 /// Um pacote do catálogo só com arquivos soltos ("instale em tf/materials/…") ganha as pastas antes de ser analisado,
 /// instalado ou entregue ao casual. Pacotes que já têm a estrutura passam sem mudança.
 async fn organize_download(zip: &Path, tf_dir: Option<PathBuf>, description: Option<&str>) -> Result<(), String> {
     let hints = localmod::install_hints(description.unwrap_or(""));
+    let lock = file_lock(zip);
+    let _turn = lock.lock().await;
     let zip = zip.to_path_buf();
     tokio::task::spawn_blocking(move || {
         let index = tf_dir.as_deref().map(vanilla::index_for);
@@ -454,7 +497,7 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
                 match fetched {
                     Ok(r) => r?,
                     Err(_) => {
-                        let _ = std::fs::remove_file(&dest);
+                        let _ = std::fs::remove_file(partial_path(&dest));
                         return Err("A prévia demorou demais: este pacote é grande e a conexão está lenta. Abra a ficha e use Analisar, ou tente de novo.".to_string());
                     }
                 }
@@ -888,6 +931,58 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
             out(analysed.map_err(|e| e.to_string())?)
         }
 
+        // Tudo que a ficha precisa saber antes de o usuário clicar em instalar: o que o arquivo muda, com quem ele
+        // brigaria e se este item já está no casual ou em custom. Baixa para o cache; não instala nada.
+        "prepare_file" => {
+            let p: AnalyzeArgs = args(a)?;
+            let details = client.details(p.kind, p.id).await.map_err(|e| e.to_string())?;
+            let file = details
+                .files
+                .iter()
+                .find(|f| f.id == p.file_id)
+                .ok_or_else(|| "esse arquivo não existe nesse item do GameBanana".to_string())?;
+            if file.contains_exe() {
+                return Err(Error::Blocked("o GameBanana avisou que este arquivo contém executável".into()).to_string());
+            }
+            if archive::format_of(&file.file_name).is_none() {
+                return Err(Error::UnsupportedFormat(file.file_name.clone()).to_string());
+            }
+
+            let dest = cached_zip(p.kind, file.id);
+            fetch_as_zip(client, file, &dest, MAX_ANALYSIS_DOWNLOAD).await?;
+            prune_cache(&analysis_cache_dir(), &dest);
+
+            let found = p.path.and_then(|s| resolve(&s).ok());
+            organize_download(&dest, found.as_ref().map(|i| i.tf_dir.clone()), details.description.as_deref()).await?;
+            let meta = ModMeta {
+                gb_id: details.id,
+                kind: p.kind.as_str().to_string(),
+                file_id: file.id,
+                file_name: file.file_name.clone(),
+                name: details.name.clone(),
+                version: None,
+                submitter: None,
+                profile_url: details.profile_url.clone(),
+                license: None,
+                md5: None,
+            };
+            tokio::task::spawn_blocking(move || -> Result<Value, String> {
+                let tf_dir = found.as_ref().map(|i| i.tf_dir.clone());
+                let index = tf_dir.as_deref().map(vanilla::index_for);
+                let analysis = analysis::analyze_zip(&dest, index.as_deref()).map_err(|e| e.to_string())?;
+                let custom = found.as_ref().map(|i| i.custom_dir());
+                let l = casual::Layout::default();
+                // um arquivo que não dá para instalar não briga com ninguém: a análise já explica o motivo
+                let clashes = conflicts::preview_install(&dest, custom.as_deref(), &meta, &l).unwrap_or_default();
+                let applied = found.as_ref().is_some_and(|i| library::preloader_state(i).applied());
+                let here = casual::installed_state(&l, tf_dir.as_deref(), applied, &meta.kind, meta.gb_id);
+                let in_custom = custom.is_some_and(|c| installer::list_managed(&c).iter().any(|m| m.meta.kind == meta.kind && m.meta.gb_id == meta.gb_id));
+                Ok(json!({ "analysis": analysis, "clashes": clashes, "in_casual": here, "in_custom": in_custom }))
+            })
+            .await
+            .map_err(|e| e.to_string())?
+        }
+
         // Toca um áudio de dentro do zip já analisado (data URL). Só áudio, só o que está no zip em cache.
         "preview_audio" => {
             let p: PreviewArgs = args(a)?;
@@ -998,6 +1093,49 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
             Ok(json!({ "saved": true }))
         }
 
+        // Os grupos de sons de um mod do casual e a escolha de cada um.
+        "casual_sounds" => {
+            let p: CasualNameArgs = args(a)?;
+            tokio::task::spawn_blocking(move || soundpick::families(&casual::Layout::default(), &p.name).map(|f| json!({ "families": f })))
+                .await
+                .map_err(|e| e.to_string())?
+        }
+
+        // Escolhe qual som toca num grupo (só na cópia do preloader; o jogo muda quando aplicar de novo).
+        "casual_sound_choose" => {
+            let p: SoundChooseArgs = args(a)?;
+            if casual::job_view().is_some_and(|j| j.state == "running") {
+                return Err("Espere a operação em andamento terminar.".into());
+            }
+            tokio::task::spawn_blocking(move || -> Result<Value, String> {
+                let l = casual::Layout::default();
+                soundpick::choose(&l, &p.name, &p.family, &p.choice)?;
+                soundpick::families(&l, &p.name).map(|f| json!({ "families": f }))
+            })
+            .await
+            .map_err(|e| e.to_string())?
+        }
+
+        // Ouvir um som do pacote antes de escolher.
+        "casual_sound_play" => {
+            let p: SoundPlayArgs = args(a)?;
+            tokio::task::spawn_blocking(move || -> Result<Value, String> {
+                let path = soundpick::option_path(&casual::Layout::default(), &p.name, &p.file)?;
+                if std::fs::metadata(&path).map(|m| m.len()).unwrap_or(u64::MAX) > analysis::MAX_PREVIEW_BYTES {
+                    return Err("este som é grande demais para a prévia".into());
+                }
+                let bytes = std::fs::read(&path).map_err(|e| Error::io(&path, e).to_string())?;
+                let mime = match path.extension().and_then(|x| x.to_str()).unwrap_or("").to_ascii_lowercase().as_str() {
+                    "mp3" => "audio/mpeg",
+                    "ogg" => "audio/ogg",
+                    _ => "audio/wav",
+                };
+                Ok(json!({ "data_url": format!("data:{mime};base64,{}", STANDARD.encode(bytes)) }))
+            })
+            .await
+            .map_err(|e| e.to_string())?
+        }
+
         // Quem briga com quem: tudo que está na lista do casual e em custom. Só leitura.
         "conflicts" => {
             let p: GameStateArgs = args(a)?;
@@ -1068,6 +1206,54 @@ pub async fn dispatch(client: &Client, name: &str, a: Value) -> Result<Value, St
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn two_requests_for_the_same_file_never_see_it_half_downloaded() {
+        use std::io::{Read, Write};
+        let mut zip_bytes = std::io::Cursor::new(Vec::new());
+        {
+            let mut w = zip::ZipWriter::new(&mut zip_bytes);
+            w.start_file("sound/ui/hitsound.wav", zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored)).unwrap();
+            w.write_all(&vec![7u8; 200_000]).unwrap();
+            w.finish().unwrap();
+        }
+        let body = zip_bytes.into_inner();
+        // servidor que atende UMA vez e manda metade, espera e manda o resto
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}/dl/", listener.local_addr().unwrap());
+        let served = body.clone();
+        std::thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            let mut req = [0u8; 2048];
+            let _ = s.read(&mut req);
+            write!(s, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", served.len()).unwrap();
+            let half = served.len() / 2;
+            s.write_all(&served[..half]).unwrap();
+            s.flush().unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(600));
+            s.write_all(&served[half..]).unwrap();
+        });
+
+        let client = Client::new("teste").unwrap().with_dl_prefix(base.clone());
+        let file = crate::gamebanana::FileInfo { id: 9, file_name: "x.zip".into(), size: body.len() as u64, download_url: format!("{base}x.zip"), md5: None, av_result: None, analysis_warnings: None };
+        let dir = std::env::temp_dir().join(format!("suny_fetch_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let dest = dir.join("Sound-9.zip");
+
+        let first = fetch_as_zip(&client, &file, &dest, 1 << 20);
+        let second = async {
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            assert!(!dest.is_file(), "o destino não pode aparecer pela metade");
+            fetch_as_zip(&client, &file, &dest, 1 << 20).await?;
+            crate::scanner::zip_paths(std::fs::File::open(&dest).unwrap()).map_err(|e| e.to_string())
+        };
+        let (a, b) = tokio::join!(first, second);
+        a.unwrap();
+        assert_eq!(b.unwrap(), vec!["sound/ui/hitsound.wav".to_string()]);
+        assert_eq!(std::fs::read(&dest).unwrap(), body);
+        assert!(!partial_path(&dest).exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     use super::*;
 
     fn client() -> Client {

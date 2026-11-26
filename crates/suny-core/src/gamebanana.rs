@@ -359,6 +359,13 @@ impl Client {
         Ok(Self { http, base: BASE.to_string(), dl_prefix: DEFAULT_DL_PREFIX.to_string(), retry_delay: Duration::from_millis(500) })
     }
 
+    /// Só para testes de outros módulos: de onde aceitar downloads.
+    #[cfg(test)]
+    pub(crate) fn with_dl_prefix(mut self, prefix: impl Into<String>) -> Self {
+        self.dl_prefix = prefix.into();
+        self
+    }
+
     /// Só para testes ou espelho: troca o endereço base.
     pub fn with_base(mut self, base: impl Into<String>) -> Self {
         self.base = base.into();

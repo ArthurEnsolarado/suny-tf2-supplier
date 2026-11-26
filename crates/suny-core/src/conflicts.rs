@@ -397,27 +397,39 @@ pub fn casual_block(l: &casual::Layout, custom_dir: Option<&Path>, selected: &[S
     Ok(find(&mods).into_iter().find(|c| c.level == Level::Block && (involved(&c.a) || involved(&c.b))))
 }
 
-/// Confere um mod ANTES de ele ir para `custom`: extrai numa pasta temporária (o mesmo caminho da instalação, então
-/// `.vpk` e pastas são julgados pelo que de fato iria para o jogo) e compara com `custom` e com o que está marcado no
-/// casual. A própria versão antiga (mesmo nome de pasta) não conta: reinstalar é trocar.
-pub fn check_install(zip_path: &Path, custom_dir: &Path, meta: &installer::ModMeta, l: &casual::Layout) -> Result<()> {
+/// Com quem este arquivo brigaria, ANTES de instalar: extrai numa pasta temporária (o mesmo caminho da instalação,
+/// então `.vpk` e pastas são julgados pelo que de fato iria para o jogo) e compara com `custom` e com o que está
+/// marcado no casual. O arquivo é o lado `a`. A própria versão antiga (mesmo nome de pasta) não conta: reinstalar é
+/// trocar. Sem a pasta do jogo, compara só com o casual.
+pub fn preview_install(zip_path: &Path, custom_dir: Option<&Path>, meta: &installer::ModMeta, l: &casual::Layout) -> Result<Vec<Clash>> {
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-    let staging = std::env::temp_dir().join("suny-tf2-supplier").join(format!("precheck-{}-{nanos}", std::process::id()));
-    let judged = (|| -> Result<()> {
+    let serial = PRECHECK.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let staging = std::env::temp_dir().join("suny-tf2-supplier").join(format!("precheck-{}-{nanos}-{serial}", std::process::id()));
+    let judged = (|| -> Result<Vec<Clash>> {
         installer::install_zip(zip_path, &staging, meta.clone())?;
         let origin = (meta.gb_id != 0).then(|| format!("{}:{}", meta.kind, meta.gb_id));
         let new = new_mod(&staging, &meta.name, origin)?;
         let slug = installer::slug_for(meta);
-        let mut others: Vec<ModFiles> = custom_mods(custom_dir)?.into_iter().filter(|m| m.id != slug).collect();
+        let mut others: Vec<ModFiles> = Vec::new();
+        if let Some(dir) = custom_dir {
+            others.extend(custom_mods(dir)?.into_iter().filter(|m| m.id != slug));
+        }
         let enabled = casual::enabled_names(l);
         others.extend(casual_mods(l).into_iter().filter(|m| enabled.contains(&m.id)));
-        match first_block(&with(new, others)) {
-            Some(c) => Err(Error::Conflict(refusal(c))),
-            None => Ok(()),
-        }
+        Ok(with(new, others))
     })();
     let _ = fs::remove_dir_all(&staging);
     judged
+}
+
+static PRECHECK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// A barreira antes de um mod ir para `custom`.
+pub fn check_install(zip_path: &Path, custom_dir: &Path, meta: &installer::ModMeta, l: &casual::Layout) -> Result<()> {
+    match first_block(&preview_install(zip_path, Some(custom_dir), meta, l)?) {
+        Some(c) => Err(Error::Conflict(refusal(c))),
+        None => Ok(()),
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------

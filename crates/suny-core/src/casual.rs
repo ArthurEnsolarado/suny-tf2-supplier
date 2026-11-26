@@ -142,6 +142,9 @@ pub fn installed_version(l: &Layout) -> Option<String> {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct State {
+    /// Mods cujo conteúdo mudou (escolha de sons) desde a última aplicação: o jogo ainda tem a versão anterior.
+    #[serde(default)]
+    changed: Vec<String>,
     /// Mods marcados para entrar na próxima aplicação.
     #[serde(default)]
     enabled: Vec<String>,
@@ -167,7 +170,7 @@ fn load_state(l: &Layout) -> State {
     std::fs::read_to_string(l.state_file()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
 }
 
-fn write_atomic(path: &Path, data: &[u8]) -> Result<(), String> {
+pub(crate) fn write_atomic(path: &Path, data: &[u8]) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("não consegui criar {}: {e}", parent.display()))?;
     }
@@ -216,6 +219,8 @@ pub struct Addon {
     pub has_models: bool,
     /// O mesmo item do GameBanana também está instalado em `custom` por este app. A cópia do Casual vence a de `custom`.
     pub also_in_custom: bool,
+    /// Quantos grupos de sons variados dá para escolher (`soundpick`).
+    pub sound_groups: usize,
 }
 
 fn dir_has_models(dir: &Path) -> bool {
@@ -223,7 +228,7 @@ fn dir_has_models(dir: &Path) -> bool {
 }
 
 /// Nome de pasta que o app aceita mexer: um item direto de `addons`, sem separador nem `..`.
-fn valid_addon_name(name: &str) -> bool {
+pub(crate) fn valid_addon_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 200
         && !name.starts_with('.')
@@ -286,6 +291,7 @@ pub fn list_addons_in(l: &Layout, custom: Option<&Path>) -> Vec<Addon> {
                 source,
                 has_models: dir_has_models(&e.path()),
                 also_in_custom,
+                sound_groups: crate::soundpick::families(l, &name).map_or(0, |f| f.len()),
                 name,
                 kind,
                 file_count: files,
@@ -295,6 +301,46 @@ pub fn list_addons_in(l: &Layout, custom: Option<&Path>) -> Vec<Addon> {
         .collect();
     out.sort_by_key(|a| a.name.to_lowercase());
     out
+}
+
+/// Um mod do casual que veio de um certo item do GameBanana, e em que pé ele está nesta instalação do jogo.
+#[derive(Debug, Clone, Serialize)]
+pub struct InstalledAddon {
+    pub name: String,
+    pub file_id: u64,
+    pub enabled: bool,
+    /// O jogo está com ESTA versão dele aplicada.
+    pub in_game: bool,
+    pub sound_groups: usize,
+}
+
+pub fn installed_state(l: &Layout, tf_dir: Option<&Path>, game_applied: bool, kind: &str, gb_id: u64) -> Vec<InstalledAddon> {
+    let state = load_state(l);
+    let applied: Vec<String> = tf_dir.and_then(|d| state.applied.get(&state_key(d))).map(|a| a.addons.clone()).unwrap_or_default();
+    list_addons(l)
+        .into_iter()
+        .filter(|a| gb_id != 0 && a.source.as_ref().is_some_and(|s| s.kind == kind && s.gb_id == gb_id))
+        .map(|a| InstalledAddon {
+            in_game: game_applied && applied.contains(&a.name) && !state.changed.contains(&a.name),
+            file_id: a.source.as_ref().map_or(0, |s| s.file_id),
+            enabled: a.enabled,
+            sound_groups: a.sound_groups,
+            name: a.name,
+        })
+        .collect()
+}
+
+/// Anota que o conteúdo de um mod mudou: só vale no jogo depois de aplicar de novo.
+pub fn mark_changed(l: &Layout, name: &str) -> Result<(), String> {
+    update_state(l, |s| {
+        if !s.changed.iter().any(|n| n == name) {
+            s.changed.push(name.to_string());
+        }
+    })
+}
+
+pub fn changed_since_apply(l: &Layout) -> Vec<String> {
+    load_state(l).changed
 }
 
 /// Os mods marcados para a próxima aplicação.
@@ -327,7 +373,11 @@ pub fn remove_addon(l: &Layout, name: &str) -> Result<(), String> {
     }
     std::fs::remove_dir_all(&dir).map_err(|e| format!("não consegui apagar {}: {e}", dir.display()))?;
     let _ = std::fs::remove_file(l.meta_dir().join(format!("{name}.json")));
-    update_state(l, |s| s.enabled.retain(|n| n != name))
+    crate::soundpick::forget(l, name);
+    update_state(l, |s| {
+        s.enabled.retain(|n| n != name);
+        s.changed.retain(|n| n != name);
+    })
 }
 
 // ---------------------------------------------------------------- tarefas
@@ -898,6 +948,7 @@ pub async fn add_zip(l: Layout, zip_path: PathBuf, addon_name: String, source: A
             if !valid_addon_name(name) {
                 continue;
             }
+            crate::soundpick::forget(&l, name);
             let meta = serde_json::to_vec_pretty(&source).map_err(|e| e.to_string())?;
             write_atomic(&l.meta_dir().join(format!("{name}.json")), &meta)?;
         }
@@ -990,6 +1041,7 @@ pub async fn apply(l: Layout, tf_dir: PathBuf, addons: Vec<String>, opts: ApplyO
         let version = installed_version(&l).unwrap_or_default();
         let list = addons.clone();
         update_state(&l, |s| {
+            s.changed.clear();
             s.enabled = list.clone();
             s.applied.insert(state_key(&tf_dir), Applied { addons: list, at: now(), preloader_version: version.clone() });
         })?;
@@ -1121,6 +1173,7 @@ pub fn status(l: &Layout, tf_dir: Option<&Path>, game_applied: Option<bool>) -> 
         "root": l.root,
         "addons": if rt == Runtime::Missing { Vec::new() } else { list_addons_in(l, tf_dir.map(|d| d.join("custom")).as_deref()) },
         "applied_here": applied_here,
+        "changed": state.changed,
         "game_applied": game_applied,
         "launch_options": launch,
         "launch_options_ok": launch.as_deref().map(launch_options_ok),

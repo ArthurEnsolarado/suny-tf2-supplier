@@ -9,6 +9,7 @@ import { casualClashes, ClashList, sideActive } from "./Clashes";
 import { JobBar } from "./JobBar";
 import { Modal } from "./Modal";
 import { ModCard } from "./ModCard";
+import { SoundPicker } from "./SoundPicker";
 
 const LAUNCH_OPTION = "+exec w/config.cfg";
 
@@ -39,6 +40,7 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
   const [checked, setChecked] = useState<Set<string>>(new Set());
   // Marcar este mod bate de frente com outros: o usuário escolhe quem fica.
   const [choice, setChoice] = useState<{ name: string; blockers: Clash[] } | undefined>();
+  const [picking, setPicking] = useState<string | undefined>();
 
   // Quem briga com quem (lista do casual e custom). Só leitura; refeito quando a lista ou o jogo mudam.
   const root = inspect?.installation.root;
@@ -78,7 +80,8 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
   const ready = status.runtime === "ready";
   const addons = status.addons;
   const appliedNames = new Set(status.game_applied ? (status.applied_here?.addons ?? []) : []);
-  const pending = ready && checked.size > 0 && (!status.game_applied || checked.size !== appliedNames.size || [...checked].some((n) => !appliedNames.has(n)));
+  // um mod marcado com os sons trocados depois da última aplicação também pede aplicar de novo
+  const pending = ready && checked.size > 0 && (!status.game_applied || checked.size !== appliedNames.size || [...checked].some((n) => !appliedNames.has(n) || status.changed.includes(n)));
 
   const start = (name: string, args: Record<string, unknown> = {}) => {
     setError(undefined);
@@ -279,6 +282,12 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
                           </div>
                         </div>
                       ) : (
+                        <>
+                        {a.sound_groups > 0 && (
+                          <button className="btn mini pick-open" disabled={busy} onClick={() => setPicking(a.name)}>
+                            {t("picker.open")}
+                          </button>
+                        )}
                         <div className="mcard-row">
                           <label className="use">
                             <input type="checkbox" className="pick" checked={checked.has(a.name)} disabled={busy} onChange={() => toggle(a.name)} />
@@ -288,6 +297,7 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
                             {t("casual.list.take")}
                           </button>
                         </div>
+                        </>
                       )
                     }
                   />
@@ -449,6 +459,18 @@ export function Casual({ status, statusError, loading, inspect, quickprecache, o
           </section>
           </div>
         </>
+      )}
+
+      {picking && (
+        <SoundPicker
+          addon={picking}
+          title={shownName(picking)}
+          busy={!!busy}
+          onClose={() => {
+            setPicking(undefined);
+            onReload();
+          }}
+        />
       )}
 
       {choice && (
